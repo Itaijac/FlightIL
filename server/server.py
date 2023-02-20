@@ -1,103 +1,76 @@
 import socket
-import SQL_ORM
+from SQL_ORM import Account, AccountManagementORM
 import threading
 import logging
-import pickle
-from protocol import send_with_size, recv_by_size, build_message
+from protocol import send_with_size, recv_by_size
 
-DEBUG = True
 exit_all = False
 logging.basicConfig(level=logging.INFO, filename="logs/serverside.log", filemode="w")
 
-class Client:
-    def __init__(self, sock, db):
-        self.sock = sock
-        self.db = db
+def handle_client(sock, thread_id, db):
+    global exit_all
+    global logging
 
-        self.user = None
-        self.selected_aircraft = None
+    account = Account()
+    current_window = "login/setup"
+    logging.info(f"Client number {str(thread_id)} connected")
 
+    while not exit_all:
+        try:
+            data = recv_by_size(sock)
+            if data == "":
+                logging.error("Seems like the client disconnected.")
+                break
+            
+            fields = data.decode().split("#")
+            action = fields[0]
 
-    def handle_client(self):
-        global exit_all
-        global logging
+            if current_window == "login/setup":
+                parameters = fields[1]
+                username, password = parameters.split("$") # extract the username, password
+                account.username = username
+                if action == "LOGR":
+                    db.log_in(account, password)
+                    to_send = f"LOGA#{int(account.is_logged)}".encode()
+                elif action == "SGNR":
+                    db.sign_up(account, password)
+                    to_send = f"SGNA#{int(account.is_logged)}".encode()
 
-        while not exit_all:
-            try:
-                data = recv_by_size(self.sock)
-                if data == "":
-                    logging.error("Seems like the client disconnected.")
-                    break
+                if account.is_logged:
+                    current_window = "select windows"
+            elif current_window == "select windows":
+                if action == "SHPR":
+                    balance, inventory = db.get_balance_and_inventory(account)
+                    to_send = f"SHPA#{balance}${inventory}".encode()
+                if action == "BUYR":
+                    parameters = fields[1]
+                    is_bought = db.buy_aircraft(account, parameters)
+                    to_send = f"BUYA#{is_bought}"
 
-                to_send = self.do_action(data, self.db)
-                send_with_size(self.sock, to_send)
+            send_with_size(sock, to_send)
 
-                if self.selected_aircraft is not None:
-                    pass # Need to enter game
-
-            except socket.error as error:
-                if error.errno == 10054:
-                    # 'Connection reset by peer'
-                    logging.error(f"Error {error.errno}. Client is Gone. {str(sock)} reset by peer.")
-                    break
-                else:
-                    logging.error(f"General Sock Error {error.no}. Client {str(sock)} disconnected.")
-                    break
-
-            except Exception as error:
-                logging.error(f"General Error: {error}")
+        except socket.error as error:
+            if error.errno == 10054:
+                # 'Connection reset by peer'
+                logging.error(f"Error {error.errno}. Client is Gone. {str(sock)} reset by peer.")
+                break
+            else:
+                logging.error(f"General Sock Error {error.no}. Client {str(sock)} disconnected.")
                 break
 
-        sock.close()
+        except Exception as error:
+            logging.error(f"General Error: {error}")
+            break
 
-    def do_action(self, data):
-        """
-        check what client ask and fill to send with the answer
-        """
-        to_send = "Not Set Yet"
-        fields = data.decode().split("#")
-        action = fields[0]
-        parameters = fields[1]
-
-        logging.info(f"Got client request {action} -- {str(parameters)}")
-
-        if action == "LOGR":
-            parameter_fields = parameters.split("$")
-            to_send = ("LOGA#" + self.db.log_in(parameter_fields[0], parameter_fields[1])).encode()
-            if to_send == 1:
-                self.user = parameter_fields[0]
-        elif action == "SGNR":
-            parameter_fields = parameters.split("$")
-            to_send = ("SGNA#" + self.db.sign_up(parameter_fields[0], parameter_fields[1])).encode()
-            if to_send == 1:
-                self.user = parameter_fields[0]
-        elif action == "MNYR":
-            try:
-                to_send = ("MNYR#" + self.db.get_money(self.user)).encode()
-            except Exception as error:
-                logging.error(f"General Error: {error}")
-        elif action == "BUYR":
-            try:
-                to_send = ("BUYR#" + self.db.buy_aircraft(self.user, parameter_fields)).encode()
-            except Exception as error:
-                logging.error(f"General Error: {error}")
-        elif action == "SELR":
-            try:
-                to_send = ("SELA#" + self.db.select_aircraft(self.user, parameter_fields)).encode()
-                if to_send[5] == "1": # Chosen aircraft
-                    self.selected_aircraft = parameter_fields
-            except Exception as error:
-                logging.error(f"General Error: {error}")
-        else:
-            to_send = build_message("ERR").encode() + b"001"
-        return to_send
+    sock.close()
 
 
 def main():
     global exit_all
 
     exit_all = False
-    db = SQL_ORM.AccountManagementORM()
+    db = AccountManagementORM()
+    db.create_table()
 
     s = socket.socket()
     s.bind(("0.0.0.0", 33445))
@@ -107,10 +80,9 @@ def main():
 
     threads = []
     i = 1
-    for i in range(10):  # For how long we want the server to run.
+    for i in range(1000):  # For how long we want the server to run.
         cli_s, addr = s.accept()
-        client = Client(cli_s, db)
-        t = threading.Thread(target=client.handle_client)
+        t = threading.Thread(target=handle_client, args=(cli_s, i, db))
         t.start()
         i += 1
         threads.append(t)

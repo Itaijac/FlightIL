@@ -9,10 +9,6 @@ TCP_DEBUG = False
 LEN_TO_PRINT = 100
 
 
-def build_message(message):
-    return message + "*" * (12 - len(message)) + "|"
-
-
 def recv_by_size(sock):
     size_header = b''
     data_len = 0
