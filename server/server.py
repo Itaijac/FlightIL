@@ -24,6 +24,7 @@ def handle_client(sock, thread_id, db):
             
             fields = data.decode().split("#")
             action = fields[0]
+            to_send = f"ERRR#0"
 
             if current_window == "login/setup":
                 parameters = fields[1]
@@ -45,7 +46,7 @@ def handle_client(sock, thread_id, db):
                 if action == "BUYR":
                     parameters = fields[1]
                     is_bought = db.buy_aircraft(account, parameters)
-                    to_send = f"BUYA#{is_bought}"
+                    to_send = f"BUYA#{int(is_bought)}"
 
             send_with_size(sock, to_send)
 

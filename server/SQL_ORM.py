@@ -12,7 +12,7 @@ class Account:
     username: str = None
     password: str = None
     balance: str = 500
-    inventory: str = "F-16|"
+    inventory: str = "F-16"
     is_logged: bool = None
 
 
@@ -27,7 +27,7 @@ class AccountManagementORM:
         self.conn (need DB file name)
         self.cursor
         """
-        self.conn = sqlite3.connect("accounts.db")
+        self.conn = sqlite3.connect("database.db")
         self.current = self.conn.cursor()
 
     def close_DB(self):
@@ -171,18 +171,25 @@ class AccountManagementORM:
 
     def buy_aircraft(self, account, aircraft_to_purchase):
         # Double check to make sure that the user isn't buying a plane that he already has
-        if aircraft_to_purchase not in account.inventory:
+        if aircraft_to_purchase not in account.inventory.split('|'):
             self.open_DB()
             query = f"SELECT price FROM aircrafts WHERE name = '{aircraft_to_purchase}'"
-            price = self.current.execute(query).fetchone()
+            price = self.current.execute(query).fetchone()[0]
 
-            if price < account.balance:
-                self.close_DB
+            if price > account.balance:
+                self.close_DB()
                 return False
                 
-            account.balance =- price
-            query = f"UPDATE aircrafts SET balance = balance - {price} WHERE username = '{account.username}'"
+            query = f"UPDATE accounts SET balance = balance - {price} WHERE username = '{account.username}'"
             self.current.execute(query)
-            self.current.commit()
+
+            query = f"UPDATE accounts SET inventory = '{account.inventory}|{aircraft_to_purchase}' WHERE username = '{account.username}'"
+            self.current.execute(query)
+
+            self.commit()
+            self.close_DB()
+
+            account.balance =- price
+            account.invnentory = f"{account.inventory}|{aircraft_to_purchase}"
             return True
         return False

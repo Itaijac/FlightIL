@@ -1,2 +1,13 @@
 INFO:root:after listen
 INFO:root:Client number 0 connected
+ERROR:root:Error 10054. Client is Gone. <socket.socket fd=424, family=2, type=1, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 50049)> reset by peer.
+INFO:root:Client number 1 connected
+ERROR:root:Error 10054. Client is Gone. <socket.socket fd=260, family=2, type=1, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 50073)> reset by peer.
+INFO:root:Client number 2 connected
+INFO:root:Client number 3 connected
+ERROR:root:Error 10054. Client is Gone. <socket.socket fd=432, family=2, type=1, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 50290)> reset by peer.
+INFO:root:Client number 4 connected
+INFO:root:Client number 5 connected
+ERROR:root:Error 10054. Client is Gone. <socket.socket fd=476, family=2, type=1, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 50324)> reset by peer.
+INFO:root:Client number 6 connected
+ERROR:root:Error 10054. Client is Gone. <socket.socket fd=380, family=2, type=1, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 50331)> reset by peer.
