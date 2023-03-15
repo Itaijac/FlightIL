@@ -13,12 +13,18 @@ from direct.gui.DirectGui import (
 
 from panda3d.core import TextNode
 
+from sql import SQL
+
+import secrets
+
 class GUI:
     def __init__(self, socket, font, render2d, world_func):
         self.socket = socket
         self.font = font
         self.render2d = render2d
         self.world_func = world_func
+
+        self.sql = SQL()
 
         self.login_menu()
         self.sign_up_menu()
@@ -368,45 +374,24 @@ class GUI:
                                        text_fg = (1, 1, 1, 1),
                                        text_align=TextNode.ALeft)
 
-        self.F_16_image = OnscreenImage(image="models/UI/select_aircraft/F-16.png",
-                                       parent = self.titleSelectAircraft,
-                                       scale=0.8)
-        self.F_16_image.setTransparency(True)
-        self.F_16_label = DirectButton(text = "General Dynamics F-16 Fighting Falcon",
-                                 scale = 0.1,
-                                 pos = (0, 0, -0.8),
-                                 relief = None,
-                                 parent = self.titleSelectAircraft,
-                                 command = self.select_aircraft_menu_to_world,
-                                 extraArgs = ["F-16"],
-                                 text_font = self.font)
+        self.select_aircraft_id = 0
+        self.select_aircraft_image = OnscreenImage(image="models/UI/select_aircraft/F-16.png",
+                                                   parent = self.titleSelectAircraft,
+                                                   scale=0.8)
+        self.select_aircraft_image.setTransparency(True)
+        self.select_aircraft_label = DirectButton(text = "General Dynamics F-16 Fighting Falcon",
+                                                  scale = 0.1,
+                                                  pos = (0, 0, -0.8),
+                                                  relief = None,
+                                                  parent = self.titleSelectAircraft,
+                                                  command = self.select_aircraft_menu_to_world,
+                                                  extraArgs = ["F-16"],
+                                                  text_font = self.font)
 
-        if "F-16" not in self.inventory:
-            self.F_16_label.setText("PRICE: NULL")
-            self.F_16_label['command'] = self.confirm_purchase
-            self.F_16_label['extraArgs'] = "F-16"
-
-        self.MiG_25PD_image = OnscreenImage(image="models/UI/select_aircraft/MiG-25PD.png",
-                                       parent = self.titleSelectAircraft,
-                                       scale=0.8)
-        self.MiG_25PD_image.setTransparency(True)
-        self.MiG_25PD_label = DirectButton(text = "Mikoyan-Gurevich MiG-25PD",
-                                 scale = 0.1,
-                                 pos = (0, 0, -0.8),
-                                 relief = None,
-                                 parent = self.titleSelectAircraft,
-                                 command = self.select_aircraft_menu_to_world,
-                                 extraArgs = ["MiG-25PD"],
-                                 text_font = self.font)
-
-        if "MiG-25PD" not in self.inventory:
-            self.MiG_25PD_label.setText("PRICE: NULL")
-            self.MiG_25PD_label['command'] = self.confirm_purchase
-            self.MiG_25PD_label['extraArgs'] = ["MiG-25PD"]
-
-        self.MiG_25PD_image.hide()
-        self.MiG_25PD_label.hide()
-
+        if self.select_aircraft_label['extraArgs'][0] not in self.inventory:
+            self.select_aircraft_label.setText(f"PRICE: {self.sql.get_price(self.select_aircraft_id)}")
+            self.select_aircraft_label['command'] = self.confirm_purchase
+            
         swipe_right_button = DirectButton(frameTexture="models/UI/right_arrow.png",
                                           pos=(1.5, 0, 0),
                                           parent = self.titleSelectAircraft,
@@ -423,7 +408,7 @@ class GUI:
     
     def confirm_purchase(self, aircraft_to_purchase):
         self.confirm_purchase_dialog = YesNoDialog(dialogName="YesNoCancelDialog", 
-                        text=f"Are you sure you wish to buy the {aircraft_to_purchase} for NULL?",
+                        text=f"Are you sure you wish to buy the {aircraft_to_purchase} for {self.sql.get_price(self.select_aircraft_id)[0]}?",
                         command=self.purchase,
                         extraArgs = [aircraft_to_purchase])
 
@@ -455,14 +440,13 @@ class GUI:
     def finish_purchase(self, arg, aircraft_purchased=None):
         self.purchase_result_dialog.destroy()
         if aircraft_purchased:
-            if aircraft_purchased == "F-16":
-                self.F_16_label.setText("General Dynamics F-16 Fighting Falcon")
-                self.F_16_label['command'] = self.select_aircraft_menu_to_world
-                self.F_16_image['extraArgs'] = ["F-16"]
-            elif aircraft_purchased == "MiG-25PD":
-                self.MiG_25PD_label.setText("Mikoyan-Gurevich MiG-25PD")
-                self.MiG_25PD_label['command'] = self.select_aircraft_menu_to_world
-                self.MiG_25PD_label['extraArgs'] = ["MiG-25PD"]
+            name, description = self.sql.get_aircraft_name_and_decsription(self.select_aircraft_id)
+
+            self.select_aircraft_image['image'] = f"models/UI/select_aircraft/{name}.png"
+            self.select_aircraft_image.setTransparency(True)
+
+            self.select_aircraft_label['text'] =  description
+            self.select_aircraft_label['extraArgs'] = [name]
 
     def sign_up_menu_to_select_aircraft_menu(self):
         # Hide Sign Up Menu
@@ -487,24 +471,39 @@ class GUI:
         self.titleSelectAircraftBackdrop.show()        
 
     def swipe_right(self):
-        if not self.F_16_image.isHidden():
-            self.F_16_image.hide()
-            self.F_16_label.hide()
-
-            self.MiG_25PD_image.show()
-            self.MiG_25PD_label.show()
+        self.select_aircraft_id = (self.select_aircraft_id + 1) % self.sql.get_aircrafts_amount()[0]
+        self.update_select_aircraft_menu()
 
     def swipe_left(self):
-        if not self.MiG_25PD_image.isHidden():
-            self.MiG_25PD_image.hide()
-            self.MiG_25PD_label.hide()
+        self.select_aircraft_id = (self.select_aircraft_id - 1) % self.sql.get_aircrafts_amount()[0]
+        self.update_select_aircraft_menu()
 
-            self.F_16_image.show()
-            self.F_16_label.show()
+    def update_select_aircraft_menu(self):
+        name, description = self.sql.get_aircraft_name_and_decsription(self.select_aircraft_id)
+
+        self.select_aircraft_image['image'] = f"models/UI/select_aircraft/{name}.png"
+        self.select_aircraft_image.setTransparency(True)
+
+        self.select_aircraft_label['text'] =  description
+        self.select_aircraft_label['extraArgs'] = [name]
+
+        if self.select_aircraft_label['extraArgs'][0] not in self.inventory:
+            self.select_aircraft_label.setText(f"PRICE: {self.sql.get_price(self.select_aircraft_id)[0]}")
+            self.select_aircraft_label['command'] = self.confirm_purchase
 
     def select_aircraft_menu_to_world(self, args):
         # Hide Plane Selection Menu
         self.titleSelectAircraft.hide()
         self.titleSelectAircraftBackdrop.hide()
+        
+        token = secrets.token_urlsafe(20)
+        to_send = f"SELR#{self.sql.get_aircraft_name_and_decsription(self.select_aircraft_id)[0]}|{token}"
+        send_with_size(self.socket, to_send)
 
-        self.world_func(args)
+        data = recv_by_size(self.socket)
+        if data == b"":
+            raise Exception("Server is down")
+        action, parameters = data.decode().split("#")
+        if action == "SELA":
+            if int(parameters) == 1:
+                self.world_func(args, token, self.username)

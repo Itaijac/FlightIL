@@ -8,6 +8,8 @@ from panda3d.core import CullBinManager
 import numpy as np
 import cv2
 
+from scipy import ndimage
+
 from constants import MAP
 
 class HUD:
@@ -90,7 +92,7 @@ class HUD:
             center_y = 1280 - m
         else:
             center_y = y
-            
+
         crop_img = self.img[center_y-m:center_y+m, center_x-m:center_x+m]
         crop_img = np.array(crop_img)
 
@@ -102,9 +104,6 @@ class HUD:
         icon_z = self.minimapHUD.getZ() + (y-center_y)/(2*m)*self.minimapHUD.getSx()
         self.minimap_iconHUD.setPos(icon_x, 0, icon_z)
         self.minimap_iconHUD.setR(-aircraft_hpr[0])
-
-    def change_map_scale(self):
-        pass
 
     def __del__(self):
         self.headingHUD.destroy()

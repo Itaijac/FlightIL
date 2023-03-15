@@ -63,7 +63,7 @@ class FlightSimulator(ShowBase):
         self.GUI = GUI(self.socket, self.font, self.render2d, self.setup_world)
 
 
-    def setup_world(self, aircraft):
+    def setup_world(self, aircraft, token, username):
         """
         Sets up the environment by loading terrain, aircraft and camera.
         """
@@ -80,14 +80,14 @@ class FlightSimulator(ShowBase):
 
         self.velocity = Vec3(0, 500, 0)
         self.acceleration = Vec3()
-        self.mass = 10_000
+        self.mass = 50_000
 
         self.throttle = 1
 
         # Aircraft data
         self.weight = 5000
         self.max_thrust = 100
-        self.built_in_angle_of_attack = 5
+        self.built_in_angle_of_attack = 10
 
         # Angle of attack values
         self.x = [-90, -40, -30, 0, 30, 40, 90]
@@ -104,10 +104,22 @@ class FlightSimulator(ShowBase):
         base.cam.lookAt(self.aircraft)
         base.cam.setP(base.cam.getP() + 10)
 
+        # Set up UDP socket
+        self.server_address = ('127.0.0.1', 8888)
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.udp_socket.settimeout(0.05)
+
+        self.other_aircrafts = []
+
+        # For the communication with the server
+        self.token = token
+        self.username = username
+
         # Tasks
         taskMgr.add(self.update_aircraft_by_physics,'Update aircraft by physics')
         taskMgr.add(self.update_aircraft_by_input, 'Update aircraft by input')
         taskMgr.add(self.update_hud, 'Update HUD')
+        taskMgr.add(self.update_other_aircrafts, 'Update other aircrafts')
 
     def get_forward(self) -> Vec3:
         """
@@ -147,21 +159,21 @@ class FlightSimulator(ShowBase):
             int: A flag indicating that the task should continue.
         """
         local_velocity = self.aircraft.getRelativeVector(render, self.velocity)
-        angle_of_attack = math.degrees(math.atan2(-local_velocity.z, local_velocity.y))
+        angle_of_attack = math.degrees(math.atan2(-local_velocity.z, local_velocity.y)) + self.built_in_angle_of_attack
 
         # Calculate gravity
         gravity_direction = Vec3(0, 0, -1)
-        gravity = gravity_direction * self.mass * 9.81
+        gravity = gravity_direction * self.mass * 9.81 * 5
 
         # Calculate thrust
-        thrust = self.get_forward() * self.max_thrust * self.throttle * 2000
+        thrust = self.get_forward() * self.max_thrust * self.throttle * 200000
 
         # Calculate drag
         drag_direction = -self.velocity.normalized()
-        drag = drag_direction * 0.5 * self.velocity.length_squared()
+        drag = drag_direction * 0.5 * self.velocity.length_squared() * 100
 
         # Calculate lift
-        lift_coefficient = np.interp(angle_of_attack, self.x, self.y) * 4
+        lift_coefficient = np.interp(angle_of_attack, self.x, self.y) * 30
         lift_direction = drag_direction.cross(self.get_right()).normalized()
         lift = lift_direction * 0.5 * self.velocity.length_squared() * lift_coefficient
 
@@ -197,6 +209,11 @@ class FlightSimulator(ShowBase):
         elif is_pressed('x'):
             if self.throttle - 0.001 >= 0.05:
                 self.throttle -= 0.001
+        if is_pressed('r'):
+            # Reset
+            self.aircraft.setPos(0, -25000, 3000)
+            self.aircraft.setHpr(0, 0, 0)
+            self.velocity = Vec3(0, 500, 0)
         return task.cont
 
     def update_hud(self, task):
@@ -212,6 +229,44 @@ class FlightSimulator(ShowBase):
         self.HUD.update(self.aircraft.getPos(), self.aircraft.getHpr(), self.velocity)
         return task.cont
 
+    def update_other_aircrafts(self, task):
+            x, y, z = self.aircraft.getPos()
+            h, p, r = self.aircraft.getHpr()
+            to_send = f"UPDR#{self.token}${x}${y}${z}${h}${p}${r}"
+            self.udp_socket.sendto(to_send.encode(), self.server_address)
+            try:
+                data, server_address = self.udp_socket.recvfrom(1024)
+            except:
+                pass
+            
+            for aircraft in self.other_aircrafts:
+                aircraft.removeNode()
+
+            fields = data.decode().split('#')
+            action = fields[0]
+            if action == "UPDA":
+                other_aircrafts_data = fields[1].split('$')
+                other_aircrafts_data = [aircraft for aircraft in other_aircrafts_data if self.username not in aircraft]
+                for aircraft in other_aircrafts_data:
+                    if aircraft != '':
+                        print(f"so:{aircraft}")
+                        name, aircraft_type, x, y, z, h, p, r = aircraft.split('|')
+
+                        x = float(x)
+                        y = float(y)
+                        z = float(z)
+                        h = float(h)
+                        p = float(p)
+                        r = float(r)
+
+                        new_other_aircraft = loader.loadModel(f'models/aircrafts/{aircraft_type}.gltf')
+                        new_other_aircraft.reparentTo(render)
+                        new_other_aircraft.setPos(x, y, z)
+                        new_other_aircraft.setHpr(h, p, r)
+                        self.other_aircrafts.append(new_other_aircraft)
+
+
+            return task.cont
     def cleanup(self):
         self.aircraft.removeNode()
         self.terrain.removeNode()
