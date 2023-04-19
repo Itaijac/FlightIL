@@ -6,9 +6,11 @@ from direct.gui.DirectGui import (
     DirectButton,
     DirectLabel,
     DirectEntry,
+    DirectDialog,
     OnscreenImage,
     OkDialog,
-    YesNoDialog
+    YesNoDialog,
+    DGG
 )
 
 from panda3d.core import TextNode
@@ -18,16 +20,19 @@ from sql import SQL
 import secrets
 
 class GUI:
-    def __init__(self, socket, font, render2d, world_func):
+    def __init__(self, socket, font, render2d, start_game_func, cleanup_game_func):
         self.socket = socket
         self.font = font
         self.render2d = render2d
-        self.world_func = world_func
+        self.start_game_func = start_game_func
+        self.cleanup_game_func = cleanup_game_func
 
         self.sql = SQL()
 
         self.login_menu()
         self.sign_up_menu()
+
+        self.game_menu()
 
         self.titleLogin.show()
         self.titleLoginBackdrop.show()
@@ -72,7 +77,7 @@ class GUI:
 
             if action == "SGNA":
                 if int(parameters):
-                    self.username = self.username_entry_login.get()
+                    self.username = self.username_entry_sign_up.get()
                     self.sign_up_menu_to_select_aircraft_menu()
                 else:
                     self.error_sign_up.setText('The username you have entered is already occupied by another user.')
@@ -433,20 +438,15 @@ class GUI:
                     self.balance -= 100
                     self.money_title.setText(f"Balance: {self.balance}")
                 else:
-                    self.purchase_result_dialog = OkDialog(dialogName = "Purchase Unuccesful",
+                    self.purchase_result_dialog = OkDialog(dialogName = "Purchase Unsuccesful",
                                                            text = f"Your purchase was unsuccesful. You do not have enough money.",
                                                            command = self.finish_purchase)
     
     def finish_purchase(self, arg, aircraft_purchased=None):
         self.purchase_result_dialog.destroy()
-        if aircraft_purchased:
-            name, description = self.sql.get_aircraft_name_and_decsription(self.select_aircraft_id)
-
-            self.select_aircraft_image['image'] = f"models/UI/select_aircraft/{name}.png"
-            self.select_aircraft_image.setTransparency(True)
-
-            self.select_aircraft_label['text'] =  description
-            self.select_aircraft_label['extraArgs'] = [name]
+        if arg == 1:
+            self.inventory.append(aircraft_purchased)
+        self.update_select_aircraft_menu()
 
     def sign_up_menu_to_select_aircraft_menu(self):
         # Hide Sign Up Menu
@@ -484,12 +484,14 @@ class GUI:
         self.select_aircraft_image['image'] = f"models/UI/select_aircraft/{name}.png"
         self.select_aircraft_image.setTransparency(True)
 
-        self.select_aircraft_label['text'] =  description
         self.select_aircraft_label['extraArgs'] = [name]
 
         if self.select_aircraft_label['extraArgs'][0] not in self.inventory:
-            self.select_aircraft_label.setText(f"PRICE: {self.sql.get_price(self.select_aircraft_id)[0]}")
+            self.select_aircraft_label['text'] = f"PRICE: {self.sql.get_price(self.select_aircraft_id)[0]}"
             self.select_aircraft_label['command'] = self.confirm_purchase
+        else:
+            self.select_aircraft_label['text'] =  description
+            self.select_aircraft_label['command'] = self.select_aircraft_menu_to_world
 
     def select_aircraft_menu_to_world(self, args):
         # Hide Plane Selection Menu
@@ -499,11 +501,67 @@ class GUI:
         token = secrets.token_urlsafe(20)
         to_send = f"SELR#{self.sql.get_aircraft_name_and_decsription(self.select_aircraft_id)[0]}|{token}"
         send_with_size(self.socket, to_send)
-
         data = recv_by_size(self.socket)
         if data == b"":
             raise Exception("Server is down")
+
         action, parameters = data.decode().split("#")
         if action == "SELA":
             if int(parameters) == 1:
-                self.world_func(args, token, self.username)
+                self.start_game_func(args, token, self.username)
+            else:
+                self.titleSelectAircraft.show()
+                self.titleSelectAircraftBackdrop.show()
+        else:
+            print(action)
+    
+    def game_menu(self):
+        self.game_menu_screen = DirectDialog(frameSize = (-0.7, 0.7, -0.7, 0.7),
+                                             fadeScreen = 0.4,
+                                             relief = DGG.FLAT)
+        label = DirectLabel(text = "Options",
+                            parent = self.game_menu_screen,
+                            scale = 0.25,
+                            pos = (0, 0, 0.3),
+                            relief = None,
+                            text_font = self.font,
+                            text_fg = (1, 1, 1, 1))
+
+        btn = DirectButton(text = "Quit",
+                        command = self.game_menu_to_select_aircraft_menu,
+                        pos = (0, 0, -0.2),
+                        parent = self.game_menu_screen,
+                        scale = 0.07,
+                        relief = None,
+                        text_font = self.font,
+                        text_fg = (1, 1, 1, 1))
+
+
+        btn = DirectButton(text = "Done",
+                        command = self.game_menu_to_game,
+                        pos = (0, 0, -0.4),
+                        parent = self.game_menu_screen,
+                        scale = 0.07,
+                        relief = None,
+                        text_font = self.font,
+                        text_fg = (1, 1, 1, 1))
+        
+        self.game_menu_screen.hide()
+
+    def game_menu_to_select_aircraft_menu(self):
+        self.game_menu_screen.hide()
+        self.cleanup_game_func()
+
+        to_send = f"EXTG".encode()
+        send_with_size(self.socket, to_send)
+
+        self.titleSelectAircraft.show()
+        self.titleSelectAircraftBackdrop.show()
+
+        self.update_select_aircraft_menu()
+
+    def game_menu_to_game(self):
+        self.game_menu_screen.hide()
+
+
+    

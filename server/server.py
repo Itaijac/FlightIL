@@ -13,10 +13,10 @@ players = {}
 lock = threading.Lock()
 
 open_world_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-open_world_socket.settimeout(0.05)
+open_world_socket.settimeout(0.1)
 open_world_socket.bind(('0.0.0.0', 8888))
 
-client_addresses = []
+client_addresses = {}
 """ End Of Open World Global Variables """
 
 
@@ -24,8 +24,6 @@ def handle_clients_open_world():
     while True:
         try:
             data, client_address = open_world_socket.recvfrom(1024)
-            if client_address not in client_addresses:
-                client_addresses.append(client_address)
         except:
             continue
         fields = data.decode().split("#")
@@ -38,6 +36,17 @@ def handle_clients_open_world():
                     players[token] = [players[token].pop(0), players[token].pop(0), x, y, z, h, p, r] # keep aircraft type
                 except:
                     logging.error("Invalid token recieved.")
+        elif action == "ADDS":
+            token = fields[1]
+            with lock:
+                for k,v in client_addresses.items():
+                    if v == token:
+                        client_addresses[k] = client_address
+                        to_send = f"ADDC"
+                        open_world_socket.sendto(to_send.encode(), client_address)
+                        break
+            
+
 
 def broadcast_players():
     while True:
@@ -48,13 +57,20 @@ def broadcast_players():
         for username, aircraft, x, y, z, h, p, r in location_data:
             to_send += f"{username}|{aircraft}|{x}|{y}|{z}|{h}|{p}|{r}$"
 
-        for client_address in client_addresses:
-            open_world_socket.sendto(to_send.encode(), client_address)
-        time.sleep(0.01)
+        to_send = to_send[:-1] # Get rid of last $
+
+        for client_address in client_addresses.values():
+            # Check if tuple and not token
+            if type(client_address) is tuple:
+                open_world_socket.sendto(to_send.encode(), client_address)
+        time.sleep(0.04)
 
 def handle_client(sock, addr, thread_id, db):
     global exit_all
     global logging
+    global players
+
+    global client_addresses
 
     account = Account()
     current_window = "login/setup"
@@ -84,6 +100,7 @@ def handle_client(sock, addr, thread_id, db):
 
                 if account.is_logged:
                     current_window = "select windows"
+
             elif current_window == "select windows":
                 if action == "SHPR":
                     balance, inventory = db.get_balance_and_inventory(account)
@@ -94,23 +111,47 @@ def handle_client(sock, addr, thread_id, db):
                     to_send = f"BUYA#{int(is_bought)}"
                 elif action == "SELR":
                     aircraft, token = fields[1].split('|')
-                    with lock:
-                        players[token] = [account.username, aircraft, 0, 0, 0, 0, 0, 0]
-                    to_send = f"SELA#1" # Need to add 1 or 0 verification
 
+                    if aircraft in account.inventory.split('|'):
+                        with lock:
+                            players[token] = [account.username, aircraft, 0, 0, 0, 0, 0, 0]
+                            client_addresses[account.username] = token
+                        account.token = token
+                        to_send = f"SELA#1"
+                        current_window = "open world"
+                    else:
+                        to_send = f"SELA#0"
+
+            elif current_window == "open world":
+                if action == "EXTG":
+                    with lock:
+                        del players[token]
+                        del client_addresses[account.username]
+                    current_window = "select windows"
+                    continue
+            
             send_with_size(sock, to_send)
 
         except socket.error as error:
             if error.errno == 10054:
                 # 'Connection reset by peer'
                 logging.error(f"Error {error.errno}. Client is Gone. {str(sock)} reset by peer.")
-                break
             else:
                 logging.error(f"General Sock Error {error.no}. Client {str(sock)} disconnected.")
-                break
+            
+            if current_window == "open world":
+                with lock:
+                    del players[token]
+                    del client_addresses[account.username]
+            break
 
         except Exception as error:
             logging.error(f"General Error: {error}")
+
+            if current_window == "open world":
+                with lock:
+                    del players[token]
+                    del client_addresses[account.username]
             break
 
     sock.close()

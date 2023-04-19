@@ -7,8 +7,7 @@ from panda3d.core import CullBinManager
 
 import numpy as np
 import cv2
-
-from scipy import ndimage
+import imutils
 
 from constants import MAP
 
@@ -33,81 +32,99 @@ class HUD:
                                         scale=(0.8, 0.1, 0.1))
         self.headingHUD.setTransparency(True)
 
-        self.img = cv2.imread(f"models/enviorment/{MAP}/GOOGLE_SAT_WM.tif")
-        self.img = cv2.flip(self.img, 0)
+        self.map_img = cv2.imread(f"models/enviorment/{MAP}/GOOGLE_SAT_WM.tif", cv2.IMREAD_UNCHANGED)
+        self.map_img = cv2.flip(self.map_img, 0)
 
-        m = 200
-        x = int(aircraft_pos[0]/38.21875)
-        y = int(aircraft_pos[1]/38.21875)
-        if y-m < 0:
-            y = m
-        if x-m < 0:
-            x = m
-        crop_img = self.img[y-m:y+m, x-m:x+m]
-        crop_img = np.array(crop_img)
+        self.aircraft_icon_img = cv2.imread(f"models/HUD/f16-icon.png", cv2.IMREAD_UNCHANGED)
+        self.aircraft_icon_img = cv2.flip(self.aircraft_icon_img, 0)
 
         self.minimap_texture = Texture()
-        self.minimap_texture.setup2dTexture(crop_img.shape[0], crop_img.shape[1],  Texture.T_unsigned_byte, Texture.F_rgb)
-        self.minimap_texture.setRamImage(crop_img)
+
         self.minimapHUD = OnscreenImage(image=self.minimap_texture,
                                         pos=(1.3, 0, -0.55),
-                                        scale=0.3)
-        
-        self.minimap_iconHUD = OnscreenImage(image="models/HUD/minimap_icon.png",
-                                             pos=(1.3, 0, -0.55),
-                                             scale=0.04)
-        self.minimap_iconHUD.setTransparency(True)
+                                        scale=0.4)
 
-        self.minimap_overlayHUD = OnscreenImage(image="models/HUD/minimap_overlay.png",
-                                        pos=(1.3, 0, -0.55),
-                                        scale=0.35)
-        self.minimap_overlayHUD.setTransparency(True)
+        self.zoom = 200
 
-        cullManager = CullBinManager.getGlobalPtr()
-        cullManager.addBin("onscreenImageBin", cullManager.BTFixed, 60)
-        self.minimap_iconHUD.setBin("onscreenImageBin", 1)
-        self.minimap_overlayHUD.setBin("onscreenImageBin", 2)
-        self.minimapHUD.setBin("onscreenImageBin", 3)
-
-    def update(self, aircraft_pos, aircraft_hpr, velocity):
-        heightHUD_text = f'{aircraft_pos.z:.0f}'
+    def update(self, aircrafts_pos, aircrafts_hpr, velocity):
+        heightHUD_text = f'{aircrafts_pos[0].z:.0f}'
         self.heightHUD.setText(heightHUD_text)
 
         velocityHUD_text = f'{velocity.length():.0f}'
         self.velocityHUD.setText(velocityHUD_text)
 
-        m = 200
-        x = int((aircraft_pos.x + 34_244)/38.21875)
-        y = int((aircraft_pos.y + 24_460)/38.21875)
-        if x - m < 0:
-            center_x = m
-        elif x + m > 1792:
-            center_x = 1792 - m
+        x = int((aircrafts_pos[0].x + 34_244)/38.21875)
+        y = int((aircrafts_pos[0].y + 24_460)/38.21875)
+        
+        if x - self.zoom < 0:
+            self.center_x = self.zoom
+        elif x + self.zoom > 1792:
+            self.center_x = 1792 - self.zoom
         else:
-            center_x = x
+            self.center_x = x
 
-        if y - m < 0:
-            center_y = m
-        elif y + m > 1280:
-            center_y = 1280 - m
+        if y - self.zoom < 0:
+            self.center_y = self.zoom
+        elif y + self.zoom > 1280:
+            self.center_y = 1280 - self.zoom
         else:
-            center_y = y
+            self.center_y = y
 
-        crop_img = self.img[center_y-m:center_y+m, center_x-m:center_x+m]
+        crop_img = np.copy(self.map_img)
+
+        for aircraft_pos, aircraft_hpr in zip(aircrafts_pos, aircrafts_hpr):
+            # Add aircrafts to crop_img
+            x_offset = int((aircraft_pos.x + 34_244)/38.21875)
+            y_offset = int((aircraft_pos.y + 24_460)/38.21875)
+
+            # Rotate aircraft
+            rotated_aircraft_icon = imutils.rotate(self.aircraft_icon_img, -aircraft_hpr[0])
+
+            # Calculate offsets
+            y_offset_start = y_offset - (rotated_aircraft_icon.shape[0] // 2)
+            y_offset_end = y_offset + (rotated_aircraft_icon.shape[0] // 2)
+            x_offset_start = x_offset - (rotated_aircraft_icon.shape[1] // 2)
+            x_offset_end = x_offset + (rotated_aircraft_icon.shape[1] // 2)
+
+            alpha_s = rotated_aircraft_icon[:, :, 3] / 255.0
+            alpha_l = 1.0 - alpha_s
+
+            try:
+                # Update crop_img
+                for c in range(0, 3):
+                    crop_img[y_offset_start:y_offset_end, x_offset_start:x_offset_end, c] = (alpha_s * rotated_aircraft_icon[:, :, c] +
+                                            alpha_l * crop_img[y_offset_start:y_offset_end, x_offset_start:x_offset_end, c])
+            except:
+                # out of border
+                pass
+        
+        crop_img = crop_img[self.center_y-self.zoom:self.center_y+self.zoom, self.center_x-self.zoom:self.center_x+self.zoom]
+        crop_img = imutils.rotate(crop_img, aircrafts_hpr[0][0])
+
+        circle_mask = np.zeros_like(crop_img)
+        circle_mask = cv2.circle(circle_mask, (crop_img.shape[0] // 2, crop_img.shape[1] // 2), self.zoom, (255,255,255), -1)
+
+        # put mask into alpha channel of input
+        crop_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2BGRA)
+        crop_img[:, :, 3] = circle_mask[:,:,0]
+
         crop_img = np.array(crop_img)
 
-        self.minimap_texture.setup2dTexture(crop_img.shape[0], crop_img.shape[1],  Texture.T_unsigned_byte, Texture.F_rgb)
+        self.minimap_texture.setup2dTexture(crop_img.shape[0], crop_img.shape[1],  Texture.T_unsigned_byte, Texture.F_rgba)
         self.minimap_texture.setRamImage(crop_img)
         self.minimapHUD.setImage(self.minimap_texture)
-        
-        icon_x = self.minimapHUD.getX() + (x-center_x)/(2*m)*self.minimapHUD.getSx()
-        icon_z = self.minimapHUD.getZ() + (y-center_y)/(2*m)*self.minimapHUD.getSx()
-        self.minimap_iconHUD.setPos(icon_x, 0, icon_z)
-        self.minimap_iconHUD.setR(-aircraft_hpr[0])
+        self.minimapHUD.setTransparency(True)
+    
+    def zoom_in(self):
+        if self.zoom > 100:
+            self.zoom -= 5
 
-    def __del__(self):
+    def zoom_out(self):
+        if self.zoom < 400:
+            self.zoom += 5
+
+    def cleanup(self):
         self.headingHUD.destroy()
         self.heightHUD.destroy()
         self.minimapHUD.destroy()
-        self.minimap_iconHUD.destroy()
         self.velocityHUD.destroy()
