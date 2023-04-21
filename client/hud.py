@@ -3,7 +3,6 @@ from direct.gui.OnscreenImage import OnscreenImage
 
 from panda3d.core import TextNode
 from panda3d.core import Texture
-from panda3d.core import CullBinManager
 
 import numpy as np
 import cv2
@@ -43,6 +42,17 @@ class HUD:
         self.minimapHUD = OnscreenImage(image=self.minimap_texture,
                                         pos=(1.3, 0, -0.55),
                                         scale=0.4)
+        
+
+        self.compass_img = cv2.imread(f"models/HUD/compass.png", cv2.IMREAD_UNCHANGED)
+        self.compass_img = cv2.flip(self.compass_img, 0)
+
+        self.compass_texture = Texture()
+
+        self.compassHUD = OnscreenImage(image=self.compass_texture,
+                                        pos=(1.3, 0, -0.55),
+                                        scale=0.5)
+        self.compassHUD.setTransparency(True)
 
         self.zoom = 200
 
@@ -53,29 +63,29 @@ class HUD:
         velocityHUD_text = f'{velocity.length():.0f}'
         self.velocityHUD.setText(velocityHUD_text)
 
-        x = int((aircrafts_pos[0].x + 34_244)/38.21875)
-        y = int((aircrafts_pos[0].y + 24_460)/38.21875)
+        x = int((aircrafts_pos[0].x + 249_490)/38.21875)
+        y = int((aircrafts_pos[0].y + 141_867)/38.21875)
         
         if x - self.zoom < 0:
             self.center_x = self.zoom
-        elif x + self.zoom > 1792:
-            self.center_x = 1792 - self.zoom
+        elif x + self.zoom > self.map_img.shape[1]:
+            self.center_x = self.map_img.shape[1] - self.zoom
         else:
             self.center_x = x
 
         if y - self.zoom < 0:
             self.center_y = self.zoom
-        elif y + self.zoom > 1280:
-            self.center_y = 1280 - self.zoom
+        elif y + self.zoom > self.map_img.shape[0]:
+            self.center_y = self.map_img.shape[0] - self.zoom
         else:
             self.center_y = y
 
-        crop_img = np.copy(self.map_img)
+        crop_img = np.copy(self.map_img[self.center_y-self.zoom:self.center_y+self.zoom, self.center_x-self.zoom:self.center_x+self.zoom])
 
         for aircraft_pos, aircraft_hpr in zip(aircrafts_pos, aircrafts_hpr):
             # Add aircrafts to crop_img
-            x_offset = int((aircraft_pos.x + 34_244)/38.21875)
-            y_offset = int((aircraft_pos.y + 24_460)/38.21875)
+            x_offset = int((aircraft_pos.x + 249_490)/38.21875) - (self.center_x - self.zoom)
+            y_offset = int((aircraft_pos.y + 141_867)/38.21875) - (self.center_y - self.zoom)
 
             # Rotate aircraft
             rotated_aircraft_icon = imutils.rotate(self.aircraft_icon_img, -aircraft_hpr[0])
@@ -98,7 +108,6 @@ class HUD:
                 # out of border
                 pass
         
-        crop_img = crop_img[self.center_y-self.zoom:self.center_y+self.zoom, self.center_x-self.zoom:self.center_x+self.zoom]
         crop_img = imutils.rotate(crop_img, aircrafts_hpr[0][0])
 
         circle_mask = np.zeros_like(crop_img)
@@ -114,6 +123,13 @@ class HUD:
         self.minimap_texture.setRamImage(crop_img)
         self.minimapHUD.setImage(self.minimap_texture)
         self.minimapHUD.setTransparency(True)
+
+        true_compass = imutils.rotate(self.compass_img, aircrafts_hpr[0][0])
+
+        self.compass_texture.setup2dTexture(true_compass.shape[0], true_compass.shape[1],  Texture.T_unsigned_byte, Texture.F_rgba)
+        self.compass_texture.setRamImage(true_compass)
+        self.compassHUD.setImage(self.compass_texture)
+        self.compassHUD.setTransparency(True)
     
     def zoom_in(self):
         if self.zoom > 100:

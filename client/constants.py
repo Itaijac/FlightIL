@@ -1,1 +1,1 @@
-MAP = 'alps'
+MAP = 'alps_3'

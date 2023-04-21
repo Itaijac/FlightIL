@@ -73,7 +73,7 @@ class FlightSimulator(ShowBase):
         # Load the aircraft
         self.aircraft = loader.loadModel(f'models/aircrafts/{aircraft}.gltf')
         self.aircraft.reparentTo(render)
-        self.aircraft.setPos(0, -25000, 3000)
+        self.aircraft.setPos(0, -150000, 3000)
 
         self.HUD = HUD(self.aircraft.getPos())
 
@@ -252,22 +252,22 @@ class FlightSimulator(ShowBase):
         """
         if self.key_map["roll-right"]:
             self.aircraft.setR(self.aircraft, self.sensitivity * 2)
-        elif self.key_map["roll-left"]:
+        if self.key_map["roll-left"]:
             self.aircraft.setR(self.aircraft, -self.sensitivity * 2)
         if self.key_map["pitch-up"]:
             self.aircraft.setP(self.aircraft, self.sensitivity)
-        elif self.key_map["pitch-down"]:
+        if self.key_map["pitch-down"]:
             self.aircraft.setP(self.aircraft, -self.sensitivity)
         if self.key_map["add-throttle"]:
             if self.throttle + 0.001 < 1:
                 self.throttle += 0.001
-        elif self.key_map["sub-throttle"]:
+        if self.key_map["sub-throttle"]:
             if self.throttle - 0.001 >= 0.05:
                 self.throttle -= 0.001
         return task.cont
     
     def reset(self):
-        self.aircraft.setPos(0, -25000, 3000)
+        self.aircraft.setPos(0, -150000, 3000)
         self.aircraft.setHpr(0, 0, 0)
         self.velocity = Vec3(0, 500, 0)
 
