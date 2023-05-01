@@ -11,23 +11,24 @@ import imutils
 from constants import MAP
 
 class HUD:
-    def __init__(self, aircraft_pos):
+    def __init__(self):
+        base_height = 0.25
         self.heightHUD = OnscreenText(text="0",
-                                      pos=(0.675, 0.025),
+                                      pos=(0.675, base_height + 0.025),
                                       scale=0.05,
                                       fg=(70, 192, 22, 255),
                                       mayChange=True,
                                       align=TextNode.ARight)
 
         self.velocityHUD = OnscreenText(text="0",
-                                        pos=(-0.675, 0.025),
+                                        pos=(-0.675, base_height + 0.025),
                                         scale=0.05,
                                         fg=(70, 192, 22, 255),
                                         mayChange=True,
                                         align=TextNode.ALeft)
 
         self.headingHUD = OnscreenImage(image="models/HUD/heading.png",
-                                        pos=(0, 0, 0),
+                                        pos=(0, 0, base_height),
                                         scale=(0.8, 0.1, 0.1))
         self.headingHUD.setTransparency(True)
 
@@ -40,7 +41,7 @@ class HUD:
         self.minimap_texture = Texture()
 
         self.minimapHUD = OnscreenImage(image=self.minimap_texture,
-                                        pos=(1.3, 0, -0.55),
+                                        pos=(1.4, 0, -0.55),
                                         scale=0.4)
         
 
@@ -50,21 +51,22 @@ class HUD:
         self.compass_texture = Texture()
 
         self.compassHUD = OnscreenImage(image=self.compass_texture,
-                                        pos=(1.3, 0, -0.55),
+                                        pos=(1.4, 0, -0.55),
                                         scale=0.5)
         self.compassHUD.setTransparency(True)
 
         self.zoom = 200
 
-    def update(self, aircrafts_pos, aircrafts_hpr, velocity):
-        heightHUD_text = f'{aircrafts_pos[0].z:.0f}'
+    def update(self, aircrafts_pos, aircrafts_hpr, velocity, ground_height):
+        ground_height = 0 if ground_height is None else ground_height
+        heightHUD_text = f'{aircrafts_pos[0].z - ground_height:.0f}'
         self.heightHUD.setText(heightHUD_text)
 
         velocityHUD_text = f'{velocity.length():.0f}'
         self.velocityHUD.setText(velocityHUD_text)
 
-        x = int((aircrafts_pos[0].x + 249_490)/38.21875)
-        y = int((aircrafts_pos[0].y + 141_867)/38.21875)
+        x = int((aircrafts_pos[0].x + (408400/2)) * (13056/408400))
+        y = int((aircrafts_pos[0].y + (233000/2)) * (7424/233000))
         
         if x - self.zoom < 0:
             self.center_x = self.zoom
@@ -84,8 +86,8 @@ class HUD:
 
         for aircraft_pos, aircraft_hpr in zip(aircrafts_pos, aircrafts_hpr):
             # Add aircrafts to crop_img
-            x_offset = int((aircraft_pos.x + 249_490)/38.21875) - (self.center_x - self.zoom)
-            y_offset = int((aircraft_pos.y + 141_867)/38.21875) - (self.center_y - self.zoom)
+            x_offset = int((aircraft_pos.x + (408400/2)) * (13056/408400)) - (self.center_x - self.zoom)
+            y_offset = int((aircraft_pos.y + (233000/2)) * (7424/233000)) - (self.center_y - self.zoom)
 
             # Rotate aircraft
             rotated_aircraft_icon = imutils.rotate(self.aircraft_icon_img, -aircraft_hpr[0])
@@ -143,4 +145,5 @@ class HUD:
         self.headingHUD.destroy()
         self.heightHUD.destroy()
         self.minimapHUD.destroy()
+        self.compassHUD.destroy()
         self.velocityHUD.destroy()

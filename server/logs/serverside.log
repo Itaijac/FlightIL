@@ -1,22 +1,5 @@
 INFO:root:after listen
 INFO:root:Client number 0 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=476, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61460)> reset by peer.
+ERROR:root:General Sock Error. Client <socket.socket fd=652, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('10.100.102.3', 33445), raddr=('10.100.102.3', 55471)> disconnected.
 INFO:root:Client number 1 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=460, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61508)> reset by peer.
-INFO:root:Client number 2 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=504, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61896)> reset by peer.
-INFO:root:Client number 3 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=524, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61906)> reset by peer.
-INFO:root:Client number 4 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=532, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61917)> reset by peer.
-INFO:root:Client number 5 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=528, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61930)> reset by peer.
-INFO:root:Client number 6 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=524, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61948)> reset by peer.
-INFO:root:Client number 7 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=540, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 61955)> reset by peer.
-INFO:root:Client number 8 connected
-INFO:root:Client number 9 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=600, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 62062)> reset by peer.
-INFO:root:Client number 10 connected
-ERROR:root:Error 10054. Client is Gone. <socket.socket fd=524, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 62079)> reset by peer.
+ERROR:root:General Sock Error. Client <socket.socket fd=436, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('10.100.102.3', 33445), raddr=('10.100.102.3', 55561)> disconnected.

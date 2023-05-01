@@ -6,6 +6,8 @@ from panda3d.core import (
     Vec4,
     Vec3,
     WindowProperties,
+    Fog,
+    LVecBase3
 )
 
 import numpy as np
@@ -13,9 +15,17 @@ import math
 import sys
 import socket
 
+import pickle
+import rsa
+import secrets
+
+import os
+os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
+import cv2
+
+from protocol import send_with_size, recv_by_size
 from hud import HUD
 from gui import GUI
-
 from constants import MAP
 
 
@@ -43,13 +53,13 @@ class FlightSimulator(ShowBase):
         self.win.requestProperties(properties)
 
         mainLight = DirectionalLight("main light")
-        mainLight.setColor(Vec4(0.7, 0.7, 0.7, 1))
+        mainLight.setColor(Vec4(0.2, 0.2, 0.2, 1))
         self.mainLightNodePath = render.attachNewNode(mainLight)
         self.mainLightNodePath.setHpr(45, -45, 0)
         render.setLight(self.mainLightNodePath)
 
         ambientLight = AmbientLight("ambient light")
-        ambientLight.setColor(Vec4(0.5, 0.5, 0.5, 1))
+        ambientLight.setColor(Vec4(0.7, 0.7, 0.7, 1))
         self.ambientLightNodePath = render.attachNewNode(ambientLight)
         render.setLight(self.ambientLightNodePath)
 
@@ -57,9 +67,21 @@ class FlightSimulator(ShowBase):
 
         # Set up the socket
         self.socket = socket.socket()
-        self.socket.connect(("127.0.0.1", 33445))
+        self.socket.connect(("10.100.102.3", 33445))
 
-        self.GUI = GUI(self.socket, self.font, self.render2d,
+        # RSA key exchange - load the public key from the server
+        public_key = pickle.loads(recv_by_size(self.socket))
+
+        # Generate the key that will be used for AES
+        AES_key = secrets.token_urlsafe(64)
+
+        # Encrypt the AES key using RSA's public key
+        encrypted_AES_key = rsa.encrypt(AES_key.encode(), public_key)
+
+        # Send the crypted key back to the server
+        send_with_size(self.socket, encrypted_AES_key)
+
+        self.GUI = GUI(self.socket, AES_key, self.font, self.render2d,
                        self.setup_world, self.cleanup)
 
     def setup_world(self, aircraft, token, username):
@@ -74,8 +96,15 @@ class FlightSimulator(ShowBase):
         self.aircraft = loader.loadModel(f'models/aircrafts/{aircraft}.gltf')
         self.aircraft.reparentTo(render)
         self.aircraft.setPos(0, -150000, 3000)
+        self.aircraft.setScale(3)
+        
+        # Add Fog
+        fog = Fog("Fog Name")
+        fog.setColor(0.52, 0.8, 0.92)
+        fog.setExpDensity(0.00005)
+        self.render.setFog(fog)
 
-        self.HUD = HUD(self.aircraft.getPos())
+        self.HUD = HUD()
 
         self.velocity = Vec3(0, 500, 0)
         self.acceleration = Vec3()
@@ -97,14 +126,32 @@ class FlightSimulator(ShowBase):
         # Controls
         self.sensitivity = 0.2
 
+        # For Collisions
+        self.height_map = cv2.imread(f"models/enviorment/{MAP}/srtm.exr", cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+        self.height_map = cv2.flip(self.height_map, 0)
+
         # Set up the camera
         base.cam.reparentTo(self.aircraft)
-        base.cam.setPos(0, -40, 10)
+        a, b = self.aircraft.getTightBounds()
+        aircraft_size = b - a
+        if aircraft == 'efroni':
+            camera_distance = 0.7
+        elif aircraft == 'tsofit':
+            camera_distance = 0.6
+        elif aircraft == 'lavie':
+            camera_distance = 0.8
+        elif aircraft == 'baz' or aircraft == 'raam':
+            camera_distance = 1.3
+        elif aircraft == 'adir':
+            camera_distance = 1.5
+        elif aircraft == 'barak' or aircraft == 'sufa':
+            camera_distance = 1
+        base.cam.setPos(LVecBase3(0, -4, 1)*int(aircraft_size[0]/3) * camera_distance)
         base.cam.lookAt(self.aircraft)
         base.cam.setP(base.cam.getP() + 10)
 
         # Set up UDP socket
-        self.server_address = ('127.0.0.1', 8888)
+        self.server_address = ('10.100.102.3', 8888)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.settimeout(0.001)
 
@@ -135,6 +182,7 @@ class FlightSimulator(ShowBase):
             "roll-left": False,
             "zoom-in": False,
             "zoom-out" : False,
+            "change-view" : False,
             "add-throttle" : False,
             "sub-throttle" : False,
             "reset" : False,
@@ -163,16 +211,27 @@ class FlightSimulator(ShowBase):
         self.accept("r", self.reset)
         self.accept("wheel_up", self.HUD.zoom_in)
         self.accept("wheel_down", self.HUD.zoom_out)
-        
+
         # Tasks
+        taskMgr.add(self.calculate_ground_height, 'Calculate the height of the ground')
         taskMgr.add(self.update_aircraft_by_physics, 'Update aircraft by physics')
         taskMgr.add(self.update_aircraft_by_input, 'Update aircraft by input')
         taskMgr.add(self.update_hud, 'Update HUD')
         taskMgr.add(self.update_other_aircrafts, 'Update other aircrafts')
+        taskMgr.add(self.detect_collisions, 'Detect collisions')
 
     # Call back function to update the keymap
     def update_key_map(self, key, state):
         self.key_map[key] = state
+    
+    def calculate_ground_height(self, task):
+        x = int((self.aircraft.getX() + (408400/2)) * (self.height_map.shape[1]/408400))
+        y = int((self.aircraft.getY() + (233000/2)) * (self.height_map.shape[0]/233000))
+        try:
+            self.ground_height = self.height_map[y,x][0]
+        except:
+            self.ground_height = 0
+        return task.cont
 
     def get_forward(self) -> Vec3:
         """
@@ -267,7 +326,7 @@ class FlightSimulator(ShowBase):
         return task.cont
     
     def reset(self):
-        self.aircraft.setPos(0, -150000, 3000)
+        self.aircraft.setPos(0, 0, 3000)
         self.aircraft.setHpr(0, 0, 0)
         self.velocity = Vec3(0, 500, 0)
 
@@ -291,7 +350,7 @@ class FlightSimulator(ShowBase):
                                                     for aircraft in self.other_aircrafts]
         aircrafts_hpr = [self.aircraft.getHpr()] + [aircraft.getHpr()
                                                     for aircraft in self.other_aircrafts]
-        self.HUD.update(aircrafts_pos, aircrafts_hpr, self.velocity)
+        self.HUD.update(aircrafts_pos, aircrafts_hpr, self.velocity, self.ground_height)
         return task.cont
 
     def update_other_aircrafts(self, task):
@@ -328,15 +387,31 @@ class FlightSimulator(ShowBase):
                     new_other_aircraft.reparentTo(render)
                     new_other_aircraft.setPos(x, y, z)
                     new_other_aircraft.setHpr(h, p, r)
+                    new_other_aircraft.setScale(3)
                     self.other_aircrafts.append(new_other_aircraft)
 
         return task.cont
 
+    def detect_collisions(self, task):
+        # Collision between aircrafts
+        for other_aircraft in self.other_aircrafts:
+            if self.aircraft.getPos(other_aircraft).length() < 10:
+                print("Collision Between Aircrafts Detected!")
+
+        # Collision between aircraft and terrain
+        if self.ground_height is not None:
+            if self.aircraft.getZ() < self.ground_height:
+                print('Collision Between Aircraft and Terrain Detected!')
+
+        return task.cont
+
     def cleanup(self):
+        taskMgr.remove('Calculate the height of the ground')
         taskMgr.remove('Update aircraft by physics')
         taskMgr.remove('Update aircraft by input')
         taskMgr.remove('Update HUD')
         taskMgr.remove('Update other aircrafts')
+        taskMgr.remove('Detect collisions')
 
         self.aircraft.removeNode()
         for aircraft in self.other_aircrafts:

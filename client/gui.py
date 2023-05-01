@@ -20,8 +20,9 @@ from sql import SQL
 import secrets
 
 class GUI:
-    def __init__(self, socket, font, render2d, start_game_func, cleanup_game_func):
+    def __init__(self, socket, AES_key, font, render2d, start_game_func, cleanup_game_func):
         self.socket = socket
+        self.key = AES_key
         self.font = font
         self.render2d = render2d
         self.start_game_func = start_game_func
@@ -44,9 +45,9 @@ class GUI:
                 self.error_login.setText('Please fill in your password.')
             else:
                 to_send = f"LOGR#{self.username_entry_login.get()}${self.password_entry_login.get()}".encode()
-                send_with_size(self.socket, to_send)
+                send_with_size(self.socket, to_send, self.key)
 
-                data = recv_by_size(self.socket)
+                data = recv_by_size(self.socket, self.key)
                 if data == "":
                     raise Exception("Server is down")
 
@@ -67,9 +68,9 @@ class GUI:
             self.error_sign_up.setText('Please fill in your password.')
         else:
             to_send = f"SGNR#{self.username_entry_sign_up.get()}${self.password_entry_sign_up.get()}".encode()
-            send_with_size(self.socket, to_send)
+            send_with_size(self.socket, to_send, self.key)
 
-            data = recv_by_size(self.socket)
+            data = recv_by_size(self.socket, self.key)
             if data == "":
                 raise Exception("Server is down")
 
@@ -357,9 +358,9 @@ class GUI:
                                       text_align=TextNode.ALeft)
 
         to_send = f"SHPR#".encode()
-        send_with_size(self.socket, to_send)
+        send_with_size(self.socket, to_send, self.key)
 
-        data = recv_by_size(self.socket)
+        data = recv_by_size(self.socket, self.key)
         if data == b"":
             raise Exception("Server is down")
         fields = data.decode().split("#")
@@ -367,7 +368,7 @@ class GUI:
         parameters = fields[1].split('$')
 
         if action == "SHPA":
-            self.balance = int(parameters[0])
+            self.balance = int(float(parameters[0]))
             self.inventory = parameters[1].split('|')
 
         self.money_title = DirectLabel(text = f"Balance: {self.balance}",
@@ -380,21 +381,21 @@ class GUI:
                                        text_align=TextNode.ALeft)
 
         self.select_aircraft_id = 0
-        self.select_aircraft_image = OnscreenImage(image="models/UI/select_aircraft/F-16.png",
+        self.select_aircraft_image = OnscreenImage(image="models/UI/select_aircraft/efroni.png",
                                                    parent = self.titleSelectAircraft,
                                                    scale=0.8)
         self.select_aircraft_image.setTransparency(True)
-        self.select_aircraft_label = DirectButton(text = "General Dynamics F-16 Fighting Falcon",
+        self.select_aircraft_label = DirectButton(text = "Efroni",
                                                   scale = 0.1,
                                                   pos = (0, 0, -0.8),
                                                   relief = None,
                                                   parent = self.titleSelectAircraft,
                                                   command = self.select_aircraft_menu_to_world,
-                                                  extraArgs = ["F-16"],
+                                                  extraArgs = ["efroni"],
                                                   text_font = self.font)
 
         if self.select_aircraft_label['extraArgs'][0] not in self.inventory:
-            self.select_aircraft_label.setText(f"PRICE: {self.sql.get_price(self.select_aircraft_id)}")
+            self.select_aircraft_label.setText(f"PRICE: {self.sql.get_price(self.select_aircraft_id)[0]}")
             self.select_aircraft_label['command'] = self.confirm_purchase
             
         swipe_right_button = DirectButton(frameTexture="models/UI/right_arrow.png",
@@ -422,9 +423,9 @@ class GUI:
 
         if arg:
             to_send = f"BUYR#{aircraft_to_purchase}"
-            send_with_size(self.socket, to_send)
+            send_with_size(self.socket, to_send, self.key)
 
-            data = recv_by_size(self.socket)
+            data = recv_by_size(self.socket, self.key)
             if data == b"":
                 raise Exception("Server is down")
             action, parameters = data.decode().split("#")
@@ -435,7 +436,7 @@ class GUI:
                                                            text = f"Your purchase was succesful. You now own {aircraft_to_purchase}.",
                                                            command = self.finish_purchase,
                                                            extraArgs = [aircraft_to_purchase])
-                    self.balance -= 100
+                    self.balance -= int(self.sql.get_price(self.select_aircraft_id)[0])
                     self.money_title.setText(f"Balance: {self.balance}")
                 else:
                     self.purchase_result_dialog = OkDialog(dialogName = "Purchase Unsuccesful",
@@ -499,9 +500,9 @@ class GUI:
         self.titleSelectAircraftBackdrop.hide()
         
         token = secrets.token_urlsafe(20)
-        to_send = f"SELR#{self.sql.get_aircraft_name_and_decsription(self.select_aircraft_id)[0]}|{token}"
-        send_with_size(self.socket, to_send)
-        data = recv_by_size(self.socket)
+        to_send = f"SELR#{self.sql.get_aircraft_name_and_decsription(self.select_aircraft_id)[0]}|{token}".encode()
+        send_with_size(self.socket, to_send, self.key)
+        data = recv_by_size(self.socket, self.key)
         if data == b"":
             raise Exception("Server is down")
 
@@ -553,7 +554,23 @@ class GUI:
         self.cleanup_game_func()
 
         to_send = f"EXTG".encode()
-        send_with_size(self.socket, to_send)
+        send_with_size(self.socket, to_send, self.key)
+
+        to_send = f"SHPR#".encode()
+        send_with_size(self.socket, to_send, self.key)
+
+        data = recv_by_size(self.socket, self.key)
+        if data == b"":
+            raise Exception("Server is down")
+        fields = data.decode().split("#")
+        action = fields[0]
+        parameters = fields[1].split('$')
+
+        if action == "SHPA":
+            self.balance = int(float(parameters[0]))
+            self.inventory = parameters[1].split('|')
+
+        self.money_title.setText(f"Balance: {self.balance}")
 
         self.titleSelectAircraft.show()
         self.titleSelectAircraftBackdrop.show()

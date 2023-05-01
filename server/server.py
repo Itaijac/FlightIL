@@ -3,6 +3,8 @@ from SQL_ORM import Account, AccountManagementORM
 import threading
 import logging
 import time
+import rsa
+import pickle
 from protocol import send_with_size, recv_by_size
 
 exit_all = False
@@ -108,7 +110,7 @@ def handle_client(sock, addr, thread_id, db):
                 elif action == "BUYR":
                     parameters = fields[1]
                     is_bought = db.buy_aircraft(account, parameters)
-                    to_send = f"BUYA#{int(is_bought)}"
+                    to_send = f"BUYA#{int(is_bought)}".encode()
                 elif action == "SELR":
                     aircraft, token = fields[1].split('|')
 
@@ -117,32 +119,33 @@ def handle_client(sock, addr, thread_id, db):
                             players[token] = [account.username, aircraft, 0, 0, 0, 0, 0, 0]
                             client_addresses[account.username] = token
                         account.token = token
-                        to_send = f"SELA#1"
+                        to_send = f"SELA#1".encode()
                         current_window = "open world"
+                        time_started_playing = time.time()
                     else:
-                        to_send = f"SELA#0"
+                        to_send = f"SELA#0".encode()
 
             elif current_window == "open world":
                 if action == "EXTG":
                     with lock:
                         del players[token]
                         del client_addresses[account.username]
+                        earned_coins = int((time.time() - time_started_playing) / 60)
+                        db.update_balance(account, earned_coins)
                     current_window = "select windows"
                     continue
             
             send_with_size(sock, to_send)
 
         except socket.error as error:
-            if error.errno == 10054:
-                # 'Connection reset by peer'
-                logging.error(f"Error {error.errno}. Client is Gone. {str(sock)} reset by peer.")
-            else:
-                logging.error(f"General Sock Error {error.no}. Client {str(sock)} disconnected.")
+            logging.error(f"General Sock Error. Client {str(sock)} disconnected.")
             
             if current_window == "open world":
                 with lock:
                     del players[token]
                     del client_addresses[account.username]
+                    earned_coins = (time.time() - time_started_playing) / 60
+                    db.update_balance(account, earned_coins)
             break
 
         except Exception as error:
@@ -152,6 +155,8 @@ def handle_client(sock, addr, thread_id, db):
                 with lock:
                     del players[token]
                     del client_addresses[account.username]
+                    earned_coins = (time.time() - time_started_playing) / 60
+                    db.update_balance(account, earned_coins)
             break
 
     sock.close()
@@ -161,9 +166,15 @@ def main():
     global exit_all
 
     exit_all = False
+
+    # Open the Database for future use
     db = AccountManagementORM()
     db.create_table()
 
+    # Set up the RSA key exchange
+    public_key, private_key = rsa.newkeys(1024)
+
+    # Create the socket and bind it
     s = socket.socket()
     s.bind(("0.0.0.0", 33445))
 
@@ -180,7 +191,15 @@ def main():
     threads = []
     i = 1
     for i in range(1000):  # For how long we want the server to run.
+        # Accept new client
         cli_s, addr = s.accept()
+
+        # key exchange with specific client
+        send_with_size(cli_s, pickle.dumps(public_key))
+
+        AES_key_encoded = recv_by_size(cli_s)
+        AES_key = rsa.decrypt(AES_key_encoded, private_key)
+        
         t = threading.Thread(target=handle_client, args=(cli_s, addr, i, db))
         t.start()
         i += 1

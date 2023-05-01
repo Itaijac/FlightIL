@@ -12,7 +12,7 @@ class Account:
     username: str = None
     password: str = None
     balance: str = 500
-    inventory: str = "F-16"
+    inventory: str = "efroni"
     is_logged: bool = None
     token: str = None
 
@@ -182,9 +182,6 @@ class AccountManagementORM:
         if price > account.balance:
             self.close_DB()
             return False
-            
-        query = f"UPDATE accounts SET balance = balance - {price} WHERE username = '{account.username}'"
-        self.current.execute(query)
 
         query = f"UPDATE accounts SET inventory = '{account.inventory}|{aircraft_to_purchase}' WHERE username = '{account.username}'"
         self.current.execute(query)
@@ -192,6 +189,16 @@ class AccountManagementORM:
         self.commit()
         self.close_DB()
 
-        account.balance =- price
+        self.update_balance(account, -price)
         account.inventory = f"{account.inventory}|{aircraft_to_purchase}"
         return True
+
+    def update_balance(self, account, price):
+        self.open_DB()
+        query = f"UPDATE accounts SET balance = balance + {price} WHERE username = '{account.username}'"
+        self.current.execute(query)
+
+        self.commit()
+        self.close_DB()
+
+        account.balance =- price
