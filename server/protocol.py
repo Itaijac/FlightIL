@@ -1,65 +1,76 @@
 import base64
+import random
 from Crypto.Cipher import AES
-from Crypto import Random
 
-
-SIZE_HEADER_FORMAT = "000000000|" # n digits for data size + one delimiter
-size_header_size = len(SIZE_HEADER_FORMAT)
+SIZE_HEADER_FORMAT = "000000000|"  # n digits for data size + one delimiter
+SIZE_HEADER_LENGTH = len(SIZE_HEADER_FORMAT)
 TCP_DEBUG = False
 LEN_TO_PRINT = 100
 
-BS = 16
-def pad(s): return s + (BS - len(s) % BS) * chr(BS - len(s) % BS)
-def unpad(s): return s[:-ord(s[len(s)-1:])]
+BLOCK_SIZE = 16
 
-def recv_by_size(sock, key=None):
-    size_header = b''
+def pad(data):
+    """Add padding to the given bytes object."""
+    padding = BLOCK_SIZE - (len(data) % BLOCK_SIZE)
+    return data + bytes([padding] * padding)
+
+def unpad(data):
+    """Remove padding from the given bytes object."""
+    padding_length = data[-1]
+    return data[:-padding_length]
+
+def recv_by_size(sock, key=None) -> bytes:
+    """Receive data of variable length over a socket."""
+    size_header = b""
     data_len = 0
-    while len(size_header) < size_header_size:
-        _s = sock.recv(size_header_size - len(size_header))
-        if _s == b'':
-            size_header = b''
+    while len(size_header) < SIZE_HEADER_LENGTH:
+        remaining = SIZE_HEADER_LENGTH - len(size_header)
+        chunk = sock.recv(remaining)
+        if chunk == b"":
+            size_header = b""
             break
-        size_header += _s
-    data  = b''
-    if size_header != b'':
-        data_len = int(size_header[:size_header_size - 1])
+        size_header += chunk
+    data = b""
+    if size_header != b"":
+        data_len = int(size_header[:SIZE_HEADER_LENGTH - 1])
         while len(data) < data_len:
-            _d = sock.recv(data_len - len(data))
-            if _d == b'':
-                data  = b''
+            remaining = data_len - len(data)
+            chunk = sock.recv(remaining)
+            if chunk == b"":
+                data = b""
                 break
-            data += _d
+            data += chunk
 
-    if  TCP_DEBUG and size_header != b'':
-        print ("\nRecv(%s)>>>" % (size_header,), end='')
-        print ("%s"%(data[:min(len(data),LEN_TO_PRINT)],))
+    if TCP_DEBUG and size_header != b"":
+        print(f"\nRecv({size_header})>>> {data[:min(len(data), LEN_TO_PRINT)]}")
+
     if data_len != len(data):
-        data=b'' # Partial data is like no data !
+        data = b""  # Partial data is like no data!
 
-    # if key is not None and data != b'':
-    #     # Decrypt 
-    #     enc = base64.b64decode(data)
-    #     iv = enc[:16]
-    #     cipher = AES.new(key, AES.MODE_CBC, iv)
-    #     data = unpad(cipher.decrypt(enc[16:])).decode()
+    if key is not None and data != b"":
+        # Decrypt data
+        enc = base64.b64decode(data)
+        iv = enc[:BLOCK_SIZE]
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        data = unpad(cipher.decrypt(enc[BLOCK_SIZE:]))
 
     return data
 
+def send_with_size(sock, data, key=None):
+    """Send data of variable length over a socket."""
+    if key is not None:
+        # Encrypt data
+        raw_data = pad(data)
+        iv = random.getrandbits(BLOCK_SIZE * 8).to_bytes(BLOCK_SIZE, "big")
+        cipher = AES.new(key, AES.MODE_CBC, iv)
+        data = base64.b64encode(iv + cipher.encrypt(raw_data))
 
-def send_with_size(sock, bdata, key=None):
-    # if key is not None:
-    #     raw = pad(bdata)
-    #     iv = Random.new().read(AES.block_size)
-    #     cipher = AES.new(key, AES.MODE_CBC, iv)
-    #     bdata = base64.b64encode(iv + cipher.encrypt(raw.encode()))
+    data_len = len(data)
+    header_data = str(data_len).zfill(SIZE_HEADER_LENGTH - 1) + "|"
 
-    len_data = len(bdata)
-    header_data = str(len(bdata)).zfill(size_header_size - 1) + "|"
+    header_bytes = header_data.encode("utf-8")
+    message_bytes = header_bytes + data
+    sock.send(message_bytes)
 
-    bytea = bytearray(header_data,encoding='utf8') + bdata
-
-    sock.send(bytea)
-    if TCP_DEBUG and  len_data > 0:
-        print ("\nSent(%s)>>>" % (len_data,), end='')
-        print ("%s"%(bytea[:min(len(bytea),LEN_TO_PRINT)],))
+    if TCP_DEBUG and data_len > 0:
+        print(f"\nSent({data_len})>>> {message_bytes[:min(len(message_bytes), LEN_TO_PRINT)]}")

@@ -48,17 +48,18 @@ class GUI:
                 send_with_size(self.socket, to_send, self.key)
 
                 data = recv_by_size(self.socket, self.key)
-                if data == "":
+                if data == b"":
                     raise Exception("Server is down")
 
                 action, parameters = data.decode().split("#")
 
-                if action == "LOGA":
-                    if int(parameters):
-                        self.username = self.username_entry_login.get()
-                        self.login_menu_to_select_aircraft_menu()
-                    else:
-                        self.error_login.setText('The username or password you have entered is invalid.')
+                if action != "LOGA":
+                    raise ValueError("Illegal action sent by the server")
+                if int(parameters):
+                    self.username = self.username_entry_login.get()
+                    self.login_menu_to_select_aircraft_menu()
+                else:
+                    self.error_login.setText('The username or password you have entered is invalid.')
 
     
     def sign_up(self, text_entered):
@@ -71,17 +72,18 @@ class GUI:
             send_with_size(self.socket, to_send, self.key)
 
             data = recv_by_size(self.socket, self.key)
-            if data == "":
+            if data == b"":
                 raise Exception("Server is down")
 
             action, parameters = data.decode().split("#")
 
-            if action == "SGNA":
-                if int(parameters):
-                    self.username = self.username_entry_sign_up.get()
-                    self.sign_up_menu_to_select_aircraft_menu()
-                else:
-                    self.error_sign_up.setText('The username you have entered is already occupied by another user.')
+            if action != "SGNA":
+                raise ValueError("Illegal action sent by the server")
+            if int(parameters):
+                self.username = self.username_entry_sign_up.get()
+                self.sign_up_menu_to_select_aircraft_menu()
+            else:
+                self.error_sign_up.setText('The username you have entered is already occupied by another user.')
 
     def login_menu(self):
         self.titleLoginBackdrop = DirectFrame(frameColor = (1, 1, 1, 1),
@@ -117,7 +119,7 @@ class GUI:
                                      frameColor = (1, 1, 1, 0.4),
                                      command = self.login,
                                      focusInCommand = self.clear_username_entry_login,
-                                     focusOutCommand = self.add_username_entry_login_description,
+                                     focusOutCommand = self.add_username_entry_login,
                                      parent = self.titleLogin,
                                      text_font = self.font, 
                                      text_fg = (0, 0, 0, 0.3))
@@ -131,7 +133,7 @@ class GUI:
                                      obscured = 0,
                                      command = self.login,
                                      focusInCommand = self.clear_password_entry_login,
-                                     focusOutCommand = self.add_password_entry_login_description,
+                                     focusOutCommand = self.add_password_entry_login,
                                      parent = self.titleLogin,
                                      text_font = self.font,
                                      text_fg = (0, 0, 0, 0.3))
@@ -163,7 +165,7 @@ class GUI:
             self.username_entry_login['text_fg'] = (0, 0, 0, 1)
             self.username_entry_login.enterText('')
     
-    def add_username_entry_login_description(self):
+    def add_username_entry_login(self):
         if len(self.username_entry_login.get()) == 0:
             self.username_entry_login['text_fg'] = (0, 0, 0, 0.3)
             self.username_entry_login.enterText("Enter your username")
@@ -174,7 +176,7 @@ class GUI:
             self.password_entry_login['obscured'] = 1
             self.password_entry_login.enterText('')
     
-    def add_password_entry_login_description(self):
+    def add_password_entry_login(self):
         if len(self.password_entry_login.get()) == 0:
             self.password_entry_login['obscured'] = 0
             self.password_entry_login['text_fg'] = (0, 0, 0, 0.3)
@@ -214,7 +216,7 @@ class GUI:
                                       frameColor = (1, 1, 1, 0.4),
                                       command = self.sign_up,
                                       focusInCommand = self.clear_username_entry_sign_up,
-                                      focusOutCommand = self.add_username_entry_sign_up_description,
+                                      focusOutCommand = self.add_username_entry_sign_up,
                                       parent = self.titleSignUp,
                                       text_font = self.font,
                                       text_fg = (0, 0, 0, 0.3))
@@ -228,7 +230,7 @@ class GUI:
                                       obscured = 0,
                                       command = self.sign_up,
                                       focusInCommand = self.clear_password_entry_sign_up,
-                                      focusOutCommand = self.add_password_entry_sign_up_description,
+                                      focusOutCommand = self.add_password_entry_sign_up,
                                       parent = self.titleSignUp,
                                       text_font = self.font,
                                       text_fg = (0, 0, 0, 0.3))
@@ -260,7 +262,7 @@ class GUI:
             self.username_entry_sign_up['text_fg'] = (0, 0, 0, 1)
             self.username_entry_sign_up.enterText('')
     
-    def add_username_entry_sign_up_description(self):
+    def add_username_entry_sign_up(self):
         if len(self.username_entry_sign_up.get()) == 0:
             self.username_entry_sign_up['text_fg'] = (0, 0, 0, 0.3)
             self.username_entry_sign_up.enterText("Enter your username")
@@ -271,7 +273,7 @@ class GUI:
             self.password_entry_sign_up['obscured'] = 1
             self.password_entry_sign_up.enterText('')
     
-    def add_password_entry_sign_up_description(self):
+    def add_password_entry_sign_up(self):
         if len(self.password_entry_sign_up.get()) == 0:
             self.password_entry_sign_up['text_fg'] = (0, 0, 0, 0.3)
             self.password_entry_sign_up['obscured'] = 0
@@ -367,9 +369,10 @@ class GUI:
         action = fields[0]
         parameters = fields[1].split('$')
 
-        if action == "SHPA":
-            self.balance = int(float(parameters[0]))
-            self.inventory = parameters[1].split('|')
+        if action != "SHPA":
+            raise ValueError("Illegal action sent by the server")
+        self.balance = int(float(parameters[0]))
+        self.inventory = parameters[1].split('|')
 
         self.money_title = DirectLabel(text = f"Balance: {self.balance}",
                                        scale = 0.05,
@@ -422,7 +425,7 @@ class GUI:
         self.confirm_purchase_dialog.destroy()
 
         if arg:
-            to_send = f"BUYR#{aircraft_to_purchase}"
+            to_send = f"BUYR#{aircraft_to_purchase}".encode()
             send_with_size(self.socket, to_send, self.key)
 
             data = recv_by_size(self.socket, self.key)
@@ -430,19 +433,20 @@ class GUI:
                 raise Exception("Server is down")
             action, parameters = data.decode().split("#")
 
-            if action == "BUYA":
-                if int(parameters):
-                    self.purchase_result_dialog = OkDialog(dialogName = "Purchase Succesful",
-                                                           text = f"Your purchase was succesful. You now own {aircraft_to_purchase}.",
-                                                           command = self.finish_purchase,
-                                                           extraArgs = [aircraft_to_purchase])
-                    self.balance -= int(self.sql.get_price(self.select_aircraft_id)[0])
-                    self.money_title.setText(f"Balance: {self.balance}")
-                else:
-                    self.purchase_result_dialog = OkDialog(dialogName = "Purchase Unsuccesful",
-                                                           text = f"Your purchase was unsuccesful. You do not have enough money.",
-                                                           command = self.finish_purchase)
-    
+            if action != "BUYA":
+                raise ValueError("Illegal action sent by the server")
+            if int(parameters):
+                self.purchase_result_dialog = OkDialog(dialogName = "Purchase Succesful",
+                                                        text = f"Your purchase was succesful. You now own {aircraft_to_purchase}.",
+                                                        command = self.finish_purchase,
+                                                        extraArgs = [aircraft_to_purchase])
+                self.balance -= int(self.sql.get_price(self.select_aircraft_id)[0])
+                self.money_title.setText(f"Balance: {self.balance}")
+            else:
+                self.purchase_result_dialog = OkDialog(dialogName = "Purchase Unsuccesful",
+                                                        text = f"Your purchase was unsuccesful. You do not have enough money.",
+                                                        command = self.finish_purchase)
+
     def finish_purchase(self, arg, aircraft_purchased=None):
         self.purchase_result_dialog.destroy()
         if arg == 1:
@@ -507,14 +511,13 @@ class GUI:
             raise Exception("Server is down")
 
         action, parameters = data.decode().split("#")
-        if action == "SELA":
-            if int(parameters) == 1:
-                self.start_game_func(args, token, self.username)
-            else:
-                self.titleSelectAircraft.show()
-                self.titleSelectAircraftBackdrop.show()
+        if action != "SELA":
+            raise ValueError("Illegal action sent by the server")
+        if int(parameters) == 1:
+            self.start_game_func(args, token, self.username, self.sql.get_mass_and_max_thrust(self.select_aircraft_id))
         else:
-            print(action)
+            self.titleSelectAircraft.show()
+            self.titleSelectAircraftBackdrop.show()
     
     def game_menu(self):
         self.game_menu_screen = DirectDialog(frameSize = (-0.7, 0.7, -0.7, 0.7),
@@ -566,9 +569,10 @@ class GUI:
         action = fields[0]
         parameters = fields[1].split('$')
 
-        if action == "SHPA":
-            self.balance = int(float(parameters[0]))
-            self.inventory = parameters[1].split('|')
+        if action != "SHPA":
+            raise ValueError("Illegal action sent by the server")
+        self.balance = int(float(parameters[0]))
+        self.inventory = parameters[1].split('|')
 
         self.money_title.setText(f"Balance: {self.balance}")
 

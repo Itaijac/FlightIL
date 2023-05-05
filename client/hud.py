@@ -8,11 +8,11 @@ import numpy as np
 import cv2
 import imutils
 
-from constants import MAP
+MAP = "alps"
 
 class HUD:
     def __init__(self):
-        base_height = 0.25
+        base_height = 0
         self.heightHUD = OnscreenText(text="0",
                                       pos=(0.675, base_height + 0.025),
                                       scale=0.05,

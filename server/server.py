@@ -1,5 +1,5 @@
 import socket
-from SQL_ORM import Account, AccountManagementORM
+from account_management import Account, AccountManagement
 import threading
 import logging
 import time
@@ -61,13 +61,14 @@ def broadcast_players():
 
         to_send = to_send[:-1] # Get rid of last $
 
-        for client_address in client_addresses.values():
-            # Check if tuple and not token
-            if type(client_address) is tuple:
-                open_world_socket.sendto(to_send.encode(), client_address)
-        time.sleep(0.04)
+        with lock:
+            for client_address in client_addresses.values():
+                # Check if tuple and not token
+                if type(client_address) is tuple:
+                    open_world_socket.sendto(to_send.encode(), client_address)
+        time.sleep(0.02)
 
-def handle_client(sock, addr, thread_id, db):
+def handle_client(sock, addr, thread_id, db, AES_key):
     global exit_all
     global logging
     global players
@@ -80,11 +81,11 @@ def handle_client(sock, addr, thread_id, db):
 
     while not exit_all:
         try:
-            data = recv_by_size(sock)
+            data = recv_by_size(sock, AES_key)
             if data == "":
                 logging.error("Seems like the client disconnected.")
                 break
-            
+
             fields = data.decode().split("#")
             action = fields[0]
             to_send = f"ERRR#0"
@@ -135,7 +136,7 @@ def handle_client(sock, addr, thread_id, db):
                     current_window = "select windows"
                     continue
             
-            send_with_size(sock, to_send)
+            send_with_size(sock, to_send, AES_key)
 
         except socket.error as error:
             logging.error(f"General Sock Error. Client {str(sock)} disconnected.")
@@ -168,7 +169,7 @@ def main():
     exit_all = False
 
     # Open the Database for future use
-    db = AccountManagementORM()
+    db = AccountManagement()
     db.create_table()
 
     # Set up the RSA key exchange
@@ -200,7 +201,7 @@ def main():
         AES_key_encoded = recv_by_size(cli_s)
         AES_key = rsa.decrypt(AES_key_encoded, private_key)
         
-        t = threading.Thread(target=handle_client, args=(cli_s, addr, i, db))
+        t = threading.Thread(target=handle_client, args=(cli_s, addr, i, db, AES_key))
         t.start()
         i += 1
         threads.append(t)

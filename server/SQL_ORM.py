@@ -98,6 +98,10 @@ class AccountManagementORM:
             account (Account): The user account to sign up with.
             password (str): The password to use for authentication.
         """
+        if len(password) < 6:
+            account.is_logged = False
+            return
+        
         # Get next ID
         self.open_DB()
         query = "SELECT MAX(id) FROM accounts;"

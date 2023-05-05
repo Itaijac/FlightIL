@@ -24,9 +24,9 @@ class SQL:
     def get_aircraft_name_and_decsription(self, id):
         self.open_DB()
         query = f"SELECT name, description FROM aircrafts WHERE id = {id};"
-        balance, inventory = self.current.execute(query).fetchone()
+        name, description = self.current.execute(query).fetchone()
         self.close_DB()
-        return balance, inventory
+        return name, description
     
     def get_aircrafts_amount(self):
         self.open_DB()
@@ -41,3 +41,10 @@ class SQL:
         price = self.current.execute(query).fetchone()
         self.close_DB()
         return price
+    
+    def get_mass_and_max_thrust(self, id):
+        self.open_DB()
+        query = f"SELECT mass, max_thrust FROM aircrafts WHERE id = {id};"
+        values = self.current.execute(query).fetchone()
+        self.close_DB()
+        return values
