@@ -1,9 +1,107 @@
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
 INFO:root:after listen
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
+ERROR:root:Invalid token recieved.
 INFO:root:Client number 0 connected
-<<<<<<< HEAD
-ERROR:root:General Error: can only concatenate str (not "bytes") to str
-=======
-ERROR:root:General Sock Error. Client <socket.socket fd=652, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('10.100.102.3', 33445), raddr=('10.100.102.3', 55471)> disconnected.
 INFO:root:Client number 1 connected
-ERROR:root:General Sock Error. Client <socket.socket fd=436, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=0, laddr=('10.100.102.3', 33445), raddr=('10.100.102.3', 55561)> disconnected.
->>>>>>> 4a19e910af0831d1b5501cbfe93aa22a90a4d26a
+ERROR:root:General Sock Error. Client <socket.socket fd=632, family=2, type=1, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 64078)> disconnected.
+ERROR:root:General Sock Error. Client <socket.socket fd=624, family=2, type=1, proto=0, laddr=('127.0.0.1', 33445), raddr=('127.0.0.1', 64077)> disconnected.

@@ -1,23 +1,12 @@
 from protocol import send_with_size, recv_by_size
 from datetime import datetime
-
-from direct.gui.DirectGui import (
-    DirectFrame,
-    DirectButton,
-    DirectLabel,
-    DirectEntry,
-    DirectDialog,
-    OnscreenImage,
-    OkDialog,
-    YesNoDialog,
-    DGG
-)
-
+from direct.gui.DirectGui import (DirectFrame, DirectButton, DirectLabel,
+                                   DirectEntry, DirectDialog, OnscreenImage,
+                                   OkDialog, YesNoDialog, DGG)
 from panda3d.core import TextNode
-
 from sql import SQL
-
 import secrets
+
 
 class GUI:
     def __init__(self, socket, AES_key, font, render2d, start_game_func, cleanup_game_func):
@@ -30,58 +19,85 @@ class GUI:
 
         self.sql = SQL()
 
+        # Initialize login, sign up, and game menus
         self.login_menu()
         self.sign_up_menu()
-
         self.game_menu()
 
+        # Show login menu and backdrop
         self.titleLogin.show()
         self.titleLoginBackdrop.show()
 
     def login(self, text_entered):
-            if len(self.username_entry_login.get()) == 0:
-                self.error_login.setText('Please fill in your username.')
-            elif len(self.password_entry_login.get()) == 0:
-                self.error_login.setText('Please fill in your password.')
+        # Check if username and password fields are filled out
+        if len(self.username_entry_login.get()) == 0:
+            self.error_login.setText('Please fill in your username.')
+        elif len(self.password_entry_login.get()) == 0:
+            self.error_login.setText('Please fill in your password.')
+        else:
+            # Send login credentials to server
+            to_send = f"LOGR#{self.username_entry_login.get()}${self.password_entry_login.get()}".encode()
+            send_with_size(self.socket, to_send, self.key)
+
+            # Receive response from server
+            data = recv_by_size(self.socket, self.key)
+
+            # Check if server is down
+            if data == b"":
+                raise Exception("Server is down")
+
+            # Parse response from server
+            action, parameters = data.decode().split("#")
+
+            # Check if action from server is legal
+            if action != "LOGA":
+                raise ValueError("Illegal action sent by the server")
+
+            # If login is successful, move to select aircraft menu
+            if int(parameters):
+                self.username = self.username_entry_login.get()
+                self.login_menu_to_select_aircraft_menu()
+            # If login is unsuccessful, display error message
             else:
-                to_send = f"LOGR#{self.username_entry_login.get()}${self.password_entry_login.get()}".encode()
-                send_with_size(self.socket, to_send, self.key)
+                self.error_login.setText('The username or password you have entered is invalid.')
 
-                data = recv_by_size(self.socket, self.key)
-                if data == b"":
-                    raise Exception("Server is down")
-
-                action, parameters = data.decode().split("#")
-
-                if action != "LOGA":
-                    raise ValueError("Illegal action sent by the server")
-                if int(parameters):
-                    self.username = self.username_entry_login.get()
-                    self.login_menu_to_select_aircraft_menu()
-                else:
-                    self.error_login.setText('The username or password you have entered is invalid.')
-
-    
     def sign_up(self, text_entered):
+        # Check if username and password fields are filled out
         if len(self.username_entry_sign_up.get()) == 0:
             self.error_sign_up.setText('Please fill in your username.')
         elif len(self.password_entry_sign_up.get()) == 0:
             self.error_sign_up.setText('Please fill in your password.')
         else:
+            # Fetch username and password from entries
+            username = self.username_entry_sign_up.get()
+            password = self.password_entry_sign_up.get()
+            if len(password) <= 6:
+                self.error_sign_up.setText('The password you have entered is too short.')
+                return
+
+            # Send login credentials to server
             to_send = f"SGNR#{self.username_entry_sign_up.get()}${self.password_entry_sign_up.get()}".encode()
             send_with_size(self.socket, to_send, self.key)
 
+            # Receive response from server
             data = recv_by_size(self.socket, self.key)
+
+            # Check if server is down
             if data == b"":
                 raise Exception("Server is down")
 
+            # Parse response from server
             action, parameters = data.decode().split("#")
 
+            # Check if action from server is legal
             if action != "SGNA":
                 raise ValueError("Illegal action sent by the server")
+
+            # If login is successful, move to select aircraft menu
             if int(parameters):
                 self.username = self.username_entry_sign_up.get()
                 self.sign_up_menu_to_select_aircraft_menu()
+            # If login is unsuccessful, display error message
             else:
                 self.error_sign_up.setText('The username you have entered is already occupied by another user.')
 

@@ -22,6 +22,9 @@ class SQL:
         self.conn.commit()
 
     def get_aircraft_name_and_decsription(self, id):
+        """
+        Returns the name and the description of aircraft by ID.
+        """
         self.open_DB()
         query = f"SELECT name, description FROM aircrafts WHERE id = {id};"
         name, description = self.current.execute(query).fetchone()
@@ -29,6 +32,9 @@ class SQL:
         return name, description
     
     def get_aircrafts_amount(self):
+        """
+        Returns the amount of aircrafts in the DB.
+        """
         self.open_DB()
         query = f"SELECT COUNT(*) FROM aircrafts;"
         amount = self.current.execute(query).fetchone()
@@ -36,6 +42,9 @@ class SQL:
         return amount
 
     def get_price(self, id):
+        """
+        Returns the price of aircraft by ID.
+        """
         self.open_DB()
         query = f"SELECT price FROM aircrafts WHERE id = {id};"
         price = self.current.execute(query).fetchone()
@@ -43,6 +52,9 @@ class SQL:
         return price
     
     def get_mass_and_max_thrust(self, id):
+        """
+        Returns the mass and max thrust of aircraft by ID.
+        """
         self.open_DB()
         query = f"SELECT mass, max_thrust FROM aircrafts WHERE id = {id};"
         values = self.current.execute(query).fetchone()

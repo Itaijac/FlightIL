@@ -15,7 +15,7 @@ players = {}
 lock = threading.Lock()
 
 open_world_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-open_world_socket.settimeout(0.1)
+open_world_socket.settimeout(0.001)
 open_world_socket.bind(('0.0.0.0', 8888))
 
 client_addresses = {}
@@ -23,52 +23,65 @@ client_addresses = {}
 
 
 def handle_clients_open_world():
+    """
+    This function handles incoming data from clients in an open world game. It extracts
+    the action and parameters from the incoming message and updates the players' positions
+    or client addresses accordingly.
+
+    """
     while True:
         try:
-            data, client_address = open_world_socket.recvfrom(1024)
+            data, client_address = open_world_socket.recvfrom(1024) # Receive data from clients
         except:
             continue
-        fields = data.decode().split("#")
-        action = fields[0]
-        if action == "UPDR":
+        fields = data.decode().split("#") # Split data into fields based on "#" delimiter
+        action = fields[0] # Get the action from the first field
+        if action == "UPDR": # If the action is "UPDR", update the player's position
             parameters = fields[1]
-            token, x, y, z, h, p, r = parameters.split("$") # extract the position and rotation
+            token, x, y, z, h, p, r = parameters.split("$") # Extract the position and rotation
             with lock:
                 try:
-                    players[token] = [players[token].pop(0), players[token].pop(0), x, y, z, h, p, r] # keep aircraft type
+                    players[token] = [players[token].pop(0), players[token].pop(0), x, y, z, h, p, r] # Update player's position
                 except:
                     logging.error("Invalid token recieved.")
-        elif action == "ADDS":
+        elif action == "ADDS": # If the action is "ADDS", update the client's address
             token = fields[1]
             with lock:
                 for k,v in client_addresses.items():
                     if v == token:
                         client_addresses[k] = client_address
                         to_send = f"ADDC"
-                        open_world_socket.sendto(to_send.encode(), client_address)
+                        open_world_socket.sendto(to_send.encode(), client_address) # Send acknowledgement message to the client
                         break
-            
 
 
 def broadcast_players():
+    """
+    This function broadcasts the players' positions to all clients in the open world game.
+
+    """
     while True:
         with lock:
-            location_data = players.values()
+            location_data = players.values() # Get the current location data of all players
 
-        to_send = f'UPDA#'
+        to_send = f'UPDA#' # Start building the message to be sent
         for username, aircraft, x, y, z, h, p, r in location_data:
-            to_send += f"{username}|{aircraft}|{x}|{y}|{z}|{h}|{p}|{r}$"
+            to_send += f"{username}|{aircraft}|{x}|{y}|{z}|{h}|{p}|{r}$" # Add each player's position data to the message
 
-        to_send = to_send[:-1] # Get rid of last $
+        to_send = to_send[:-1] # Get rid of last "$" delimiter
 
         with lock:
             for client_address in client_addresses.values():
-                # Check if tuple and not token
-                if type(client_address) is tuple:
-                    open_world_socket.sendto(to_send.encode(), client_address)
-        time.sleep(0.02)
+                if type(client_address) is tuple: # Check if the client address is a tuple (i.e., not a token)
+                    open_world_socket.sendto(to_send.encode(), client_address) # Send the message to the client's address
+        time.sleep(0.02) # Sleep for a short time before sending the next update
+
 
 def handle_client(sock, addr, thread_id, db, AES_key):
+    """
+    This function handles a single client connection by receiving and processing messages sent from the client.
+    It also sends responses back to the client as needed."
+    """
     global exit_all
     global logging
     global players
@@ -81,18 +94,25 @@ def handle_client(sock, addr, thread_id, db, AES_key):
 
     while not exit_all:
         try:
+            # Recieve data from client
             data = recv_by_size(sock, AES_key)
+            
+            # Check if server is down
             if data == "":
                 logging.error("Seems like the client disconnected.")
                 break
-
+            
+            # Parse response from server
             fields = data.decode().split("#")
             action = fields[0]
             to_send = f"ERRR#0"
 
+            # According to the value of current_window treat the request
             if current_window == "login/setup":
                 parameters = fields[1]
-                username, password = parameters.split("$") # extract the username, password
+                username, password = parameters.split("$") # Extract the username, password
+
+                # Fill in the instance of the dataclass Account.
                 account.username = username
                 if action == "LOGR":
                     db.log_in(account, password)
@@ -101,6 +121,7 @@ def handle_client(sock, addr, thread_id, db, AES_key):
                     db.sign_up(account, password)
                     to_send = f"SGNA#{int(account.is_logged)}".encode()
 
+                # If login/sign up was succesful, change windows accordingly
                 if account.is_logged:
                     current_window = "select windows"
 
@@ -115,22 +136,38 @@ def handle_client(sock, addr, thread_id, db, AES_key):
                 elif action == "SELR":
                     aircraft, token = fields[1].split('|')
 
+                    # If the aircraft chosen is in the inventory, move to open world
                     if aircraft in account.inventory.split('|'):
                         with lock:
+                            # Add player to the global lists. The token will be replaced by the clients' address
+                            # In the future
                             players[token] = [account.username, aircraft, 0, 0, 0, 0, 0, 0]
                             client_addresses[account.username] = token
+
+                        # Fill in account
                         account.token = token
+
                         to_send = f"SELA#1".encode()
+
+                        # Change window to open world
                         current_window = "open world"
+
+                        # Start measuring time for balance updating purposes
                         time_started_playing = time.time()
                     else:
+                        # If the user tried to manipulate the server and join with an aircraft
+                        # that does not belong to him
                         to_send = f"SELA#0".encode()
 
             elif current_window == "open world":
+                # If the player wishes to exist the open world
                 if action == "EXTG":
                     with lock:
+                        # Get rid of his spot in the global lists
                         del players[token]
                         del client_addresses[account.username]
+
+                        # Update his balance for his time playing
                         earned_coins = int((time.time() - time_started_playing) / 60)
                         db.update_balance(account, earned_coins)
                     current_window = "select windows"
@@ -141,6 +178,8 @@ def handle_client(sock, addr, thread_id, db, AES_key):
         except socket.error as error:
             logging.error(f"General Sock Error. Client {str(sock)} disconnected.")
             
+            # Remove client from global lists as part of exception handeling,
+            # to prevent sending updates to a dead socket.
             if current_window == "open world":
                 with lock:
                     del players[token]
@@ -152,6 +191,8 @@ def handle_client(sock, addr, thread_id, db, AES_key):
         except Exception as error:
             logging.error(f"General Error: {error}")
 
+            # Remove client from global lists as part of exception handeling,
+            # to prevent sending updates to a dead socket.
             if current_window == "open world":
                 with lock:
                     del players[token]

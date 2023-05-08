@@ -65,9 +65,11 @@ def send_with_size(sock, data, key=None):
         cipher = AES.new(key, AES.MODE_CBC, iv)
         data = base64.b64encode(iv + cipher.encrypt(raw_data))
 
+    # Pad data with message size
     data_len = len(data)
     header_data = str(data_len).zfill(SIZE_HEADER_LENGTH - 1) + "|"
 
+    # Send data
     header_bytes = header_data.encode("utf-8")
     message_bytes = header_bytes + data
     sock.send(message_bytes)

@@ -47,7 +47,7 @@ class FlightSimulator(ShowBase):
 
         # Set up the socket
         self.socket = socket.socket()
-        self.socket.connect(("10.100.102.3", 33445))
+        self.socket.connect(("127.0.0.1", 33445))
 
         # RSA key exchange - load the public key from the server
         public_key = pickle.loads(recv_by_size(self.socket))
@@ -150,7 +150,7 @@ class FlightSimulator(ShowBase):
         base.cam.setP(base.cam.getP() + 10)
 
         # Set up UDP socket
-        self.server_address = ('10.100.102.3', 8888)
+        self.server_address = ('127.0.0.1', 8888)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.settimeout(0.001)
 
