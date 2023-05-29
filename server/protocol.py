@@ -4,7 +4,7 @@ from Crypto.Cipher import AES
 
 SIZE_HEADER_FORMAT = "000000000|"  # n digits for data size + one delimiter
 SIZE_HEADER_LENGTH = len(SIZE_HEADER_FORMAT)
-TCP_DEBUG = False
+TCP_DEBUG = True
 LEN_TO_PRINT = 100
 
 BLOCK_SIZE = 16

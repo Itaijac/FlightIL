@@ -3,6 +3,8 @@ import secrets
 import hashlib
 import base64
 import time
+import sys
+import traceback
 from dataclasses import dataclass
 
 
@@ -128,8 +130,20 @@ class AccountManagement:
 
         try:
             self.current.execute(query % params)
-        except Exception:
+        except sqlite3.Error as er:
+            print('SQLite error: %s' % (' '.join(er.args)))
+            print("Exception class is: ", er.__class__)
+            print('SQLite traceback: ')
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            print(traceback.format_exception(exc_type, exc_value, exc_tb))
+
+            account.id = None
+            account.password = None
             account.is_logged = False
+            account.token = None
+            
+            self.commit()
+            self.close_DB()
             return
 
         # If the insertion worked
@@ -181,9 +195,10 @@ class AccountManagement:
 
         self.open_DB()
         query = f"SELECT price FROM aircrafts WHERE name = '{aircraft_to_purchase}'"
+        print(query)
         price = self.current.execute(query).fetchone()[0]
 
-        if price > account.balance:
+        if price >= account.balance:
             self.close_DB()
             return False
 
@@ -205,4 +220,12 @@ class AccountManagement:
         self.commit()
         self.close_DB()
 
-        account.balance =- price
+        account.balance += price
+
+    def delete_account(self, username):
+        self.open_DB()
+        query = f"DELETE FROM accounts WHERE username = '{username}'"
+        self.current.execute(query)
+
+        self.commit()
+        self.close_DB()

@@ -144,15 +144,11 @@ class HUD:
         self.compassHUD.setImage(self.compass_texture)
         self.compassHUD.setTransparency(True)
     
-    def zoom_in(self) -> None:
-        """Decrease zoom level by 5, with a minimum of 100."""
-        if self.zoom > 100:
-            self.zoom -= 5
-
-    def zoom_out(self) -> None:
-        """Increase zoom level by 5, with a maximum of 400."""
-        if self.zoom < 400:
-            self.zoom += 5
+    def update_zoom(self, amount) -> None:
+        """Update zoom level by amount between 100 and 400."""
+        new_zoom = self.zoom + int(amount * 4) 
+        if new_zoom > 100 and new_zoom < 400:
+            self.zoom = new_zoom
 
     def cleanup(self) -> None:
         """Destroy all Heads-Up Display (HUD) objects."""

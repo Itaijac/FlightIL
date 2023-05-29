@@ -1,11 +1,12 @@
 import socket
-from account_management import Account, AccountManagement
 import threading
 import logging
 import time
 import rsa
 import pickle
+
 from protocol import send_with_size, recv_by_size
+from account_management import Account, AccountManagement
 
 exit_all = False
 logging.basicConfig(level=logging.INFO, filename="logs/serverside.log", filemode="w")
@@ -22,6 +23,28 @@ client_addresses = {}
 """ End Of Open World Global Variables """
 
 
+def manage_server_by_input(db):
+    global exit_all
+    """
+    This function allows the manager of the server to control the game network
+    """
+    # print instructions
+    print("Welcome to FlightIL's control senter. Available commands are:\n")
+    print('* HELP *\n* DELETE ACCOUNT *\n* EXIT *\n')
+
+    # loop until user requested to exit
+    while True:
+        cmd = input("Please enter command:\n")
+        if cmd == 'DELETE ACCOUNT':
+            name = input("Please enter account name:\n")
+            db.delete_account(name)
+        if cmd == 'EXIT':
+            logging.info(f"Shutting down all clients")
+            exit_all = True
+            break
+        else:
+            print("Not a valid command, or missing parameters\n")
+
 def handle_clients_open_world():
     """
     This function handles incoming data from clients in an open world game. It extracts
@@ -29,7 +52,9 @@ def handle_clients_open_world():
     or client addresses accordingly.
 
     """
-    while True:
+    global exit_all
+
+    while not exit_all:
         try:
             data, client_address = open_world_socket.recvfrom(1024) # Receive data from clients
         except:
@@ -60,7 +85,9 @@ def broadcast_players():
     This function broadcasts the players' positions to all clients in the open world game.
 
     """
-    while True:
+    global exit_all
+
+    while not exit_all:
         with lock:
             location_data = players.values() # Get the current location data of all players
 
@@ -92,21 +119,27 @@ def handle_client(sock, addr, thread_id, db, AES_key):
     current_window = "login/setup"
     logging.info(f"Client number {str(thread_id)} connected")
 
+    sock.settimeout(1)
+
     while not exit_all:
         try:
-            # Recieve data from client
-            data = recv_by_size(sock, AES_key)
+            # Recieve data from client. If timeout passes, recv again
+            try:
+                data = recv_by_size(sock, AES_key)
+            except:
+                continue
             
             # Check if server is down
             if data == "":
                 logging.error("Seems like the client disconnected.")
-                break
+                sock.close()
+                return
             
             # Parse response from server
             fields = data.decode().split("#")
             action = fields[0]
-            to_send = f"ERRR#0"
-
+            to_send = f"ERRR#0".encode()
+            
             # According to the value of current_window treat the request
             if current_window == "login/setup":
                 parameters = fields[1]
@@ -123,16 +156,21 @@ def handle_client(sock, addr, thread_id, db, AES_key):
 
                 # If login/sign up was succesful, change windows accordingly
                 if account.is_logged:
+                    logging.info(f"Client number {str(thread_id)} signed up/logged in as {account.username}")
                     current_window = "select windows"
 
             elif current_window == "select windows":
                 if action == "SHPR":
                     balance, inventory = db.get_balance_and_inventory(account)
                     to_send = f"SHPA#{balance}${inventory}".encode()
+
                 elif action == "BUYR":
                     parameters = fields[1]
                     is_bought = db.buy_aircraft(account, parameters)
                     to_send = f"BUYA#{int(is_bought)}".encode()
+                    if int(is_bought):
+                        logging.info(f"Client number {str(thread_id)} succesfully bought {parameters}")
+
                 elif action == "SELR":
                     aircraft, token = fields[1].split('|')
 
@@ -154,6 +192,9 @@ def handle_client(sock, addr, thread_id, db, AES_key):
 
                         # Start measuring time for balance updating purposes
                         time_started_playing = time.time()
+
+                        # Log
+                        logging.info(f"Client number {str(thread_id)} entered open world using {aircraft}")
                     else:
                         # If the user tried to manipulate the server and join with an aircraft
                         # that does not belong to him
@@ -162,6 +203,7 @@ def handle_client(sock, addr, thread_id, db, AES_key):
             elif current_window == "open world":
                 # If the player wishes to exist the open world
                 if action == "EXTG":
+                    logging.info(f"Client number {str(thread_id)} left the open world")
                     with lock:
                         # Get rid of his spot in the global lists
                         del players[token]
@@ -172,6 +214,18 @@ def handle_client(sock, addr, thread_id, db, AES_key):
                         db.update_balance(account, earned_coins)
                     current_window = "select windows"
                     continue
+                elif action == "EXTC":
+                    logging.info(f"Client number {str(thread_id)} disconnected")
+                    with lock:
+                        # Get rid of his spot in the global lists
+                        del players[token]
+                        del client_addresses[account.username]
+
+                        # Update his balance for his time playing
+                        earned_coins = int((time.time() - time_started_playing) / 60)
+                        db.update_balance(account, earned_coins)
+                    sock.close()
+                    return
             
             send_with_size(sock, to_send, AES_key)
 
@@ -186,21 +240,25 @@ def handle_client(sock, addr, thread_id, db, AES_key):
                     del client_addresses[account.username]
                     earned_coins = (time.time() - time_started_playing) / 60
                     db.update_balance(account, earned_coins)
-            break
+            sock.close()
+            return
 
         except Exception as error:
             logging.error(f"General Error: {error}")
 
-            # Remove client from global lists as part of exception handeling,
-            # to prevent sending updates to a dead socket.
+
             if current_window == "open world":
                 with lock:
                     del players[token]
                     del client_addresses[account.username]
                     earned_coins = (time.time() - time_started_playing) / 60
                     db.update_balance(account, earned_coins)
-            break
+            sock.close()
+            return
 
+    # If we get here the server is shutting down.
+    to_send = f"EXTS".encode()
+    send_with_size(sock, to_send, AES_key)
     sock.close()
 
 
@@ -220,21 +278,35 @@ def main():
     s = socket.socket()
     s.bind(("0.0.0.0", 33445))
 
+
+    # Threads handeling
+    threads = []
+
+    # Open manager thread
+    manager_thread = threading.Thread(target=manage_server_by_input, args=(db,))
+    manager_thread.start()
+    threads.append(manager_thread)
+
     # Open world threads
     client_thread = threading.Thread(target=handle_clients_open_world)
     client_thread.start()
+    threads.append(client_thread)
 
     broadcast_thread = threading.Thread(target=broadcast_players)
     broadcast_thread.start()
+    threads.append(broadcast_thread)
 
+    s.settimeout(2)
     s.listen(4)
     logging.info("after listen")
 
-    threads = []
     i = 1
-    for i in range(1000):  # For how long we want the server to run.
+    while not exit_all:  # For how long we want the server to run.
         # Accept new client
-        cli_s, addr = s.accept()
+        try:
+            cli_s, addr = s.accept()
+        except:
+            continue
 
         # key exchange with specific client
         send_with_size(cli_s, pickle.dumps(public_key))
@@ -247,7 +319,6 @@ def main():
         i += 1
         threads.append(t)
 
-    exit_all = True
     for t in threads:
         t.join()
     s.close()

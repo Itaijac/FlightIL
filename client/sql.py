@@ -21,7 +21,7 @@ class SQL:
     def commit(self):
         self.conn.commit()
 
-    def get_aircraft_name_and_decsription(self, id):
+    def get_aircraft_name_and_description(self, id):
         """
         Returns the name and the description of aircraft by ID.
         """

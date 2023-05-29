@@ -8,7 +8,7 @@ from protocol import send_with_size, recv_by_size
 from direct.showbase.ShowBase import ShowBase
 
 from panda3d.core import AmbientLight, DirectionalLight, Vec4, Vec3,\
-    WindowProperties, Fog, LVecBase3
+    WindowProperties, Fog, LVecBase3, InputDevice
 
 import numpy as np
 import math
@@ -26,7 +26,7 @@ class FlightSimulator(ShowBase):
     This class represents a flight simulator in a 3D environment.
     """
 
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, ip:str):
         """
         Constructor for the FlightSimulator class.
 
@@ -46,8 +46,12 @@ class FlightSimulator(ShowBase):
         self.win.requestProperties(properties)
 
         # Set up the socket
+        self.ip = ip
         self.socket = socket.socket()
-        self.socket.connect(("127.0.0.1", 33445))
+        try:
+            self.socket.connect((self.ip, 33445))
+        except:
+            raise ValueError("Invalid IP entered")
 
         # RSA key exchange - load the public key from the server
         public_key = pickle.loads(recv_by_size(self.socket))
@@ -63,7 +67,7 @@ class FlightSimulator(ShowBase):
 
         # Set up the GUI
         self.GUI = GUI(self.socket, AES_key, self.font, self.render2d,
-                       self.setup_world, self.cleanup)
+                       self.setup_world, self.cleanup, self.exit)
 
     def setup_world(self, aircraft: str, token: str, username: str, aircraft_specs: tuple):
         """
@@ -122,7 +126,7 @@ class FlightSimulator(ShowBase):
         self.AoA_y = [0, -0.1, -1, 0, 1, 0.1, 0]
 
         # Controls
-        self.sensitivity = 0.2
+        self.sensitivity = 0.6
 
         # For Collisions
         self.height_map = cv2.imread(
@@ -150,7 +154,7 @@ class FlightSimulator(ShowBase):
         base.cam.setP(base.cam.getP() + 10)
 
         # Set up UDP socket
-        self.server_address = ('127.0.0.1', 8888)
+        self.server_address = (self.ip, 8888)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.udp_socket.settimeout(0.001)
 
@@ -188,40 +192,48 @@ class FlightSimulator(ShowBase):
             "reset": False,
             "quit": False
         }
+        # Is there a gamepad connected?
+        self.gamepad = None
+        devices = base.devices.getDevices(InputDevice.DeviceClass.flight_stick)
+        if devices:
+            self.device = devices[0]
+        else:
+            # Set up the connection between the key map and the keyboard input.
+            # Whenever one of the following inputs will be inputted, the function
+            # "update_key_map" will change the value of self.key_map accordingly.
+            self.accept("w", self.update_key_map, ["pitch-down", True])
+            self.accept("w-up", self.update_key_map, ["pitch-down", False])
 
-        # Set up the connection between the key map and the keyboard input.
-        # Whenever one of the following inputs will be inputted, the function
-        # "update_key_map" will change the value of self.key_map accordingly.
-        self.accept("w", self.update_key_map, ["pitch-down", True])
-        self.accept("w-up", self.update_key_map, ["pitch-down", False])
+            self.accept("s", self.update_key_map, ["pitch-up", True])
+            self.accept("s-up", self.update_key_map, ["pitch-up", False])
 
-        self.accept("s", self.update_key_map, ["pitch-up", True])
-        self.accept("s-up", self.update_key_map, ["pitch-up", False])
+            self.accept("a", self.update_key_map, ["roll-left", True])
+            self.accept("a-up", self.update_key_map, ["roll-left", False])
 
-        self.accept("a", self.update_key_map, ["roll-left", True])
-        self.accept("a-up", self.update_key_map, ["roll-left", False])
+            self.accept("d", self.update_key_map, ["roll-right", True])
+            self.accept("d-up", self.update_key_map, ["roll-right", False])
 
-        self.accept("d", self.update_key_map, ["roll-right", True])
-        self.accept("d-up", self.update_key_map, ["roll-right", False])
+            self.accept("z", self.update_key_map, ["add-throttle", True])
+            self.accept("z-up", self.update_key_map, ["add-throttle", False])
 
-        self.accept("z", self.update_key_map, ["add-throttle", True])
-        self.accept("z-up", self.update_key_map, ["add-throttle", False])
-
-        self.accept("x", self.update_key_map, ["sub-throttle", True])
-        self.accept("x-up", self.update_key_map, ["sub-throttle", False])
+            self.accept("x", self.update_key_map, ["sub-throttle", True])
+            self.accept("x-up", self.update_key_map, ["sub-throttle", False])
 
         # These inputs can not be held down so the key map is not needed
         self.accept("escape", self.toggle_game_menu)
         self.accept("r", self.reset)
-        self.accept("wheel_up", self.HUD.zoom_in)
-        self.accept("wheel_down", self.HUD.zoom_out)
+        self.accept("wheel_up", self.HUD.update_zoom, extraArgs=[5])
+        self.accept("wheel_down", self.HUD.update_zoom, extraArgs=[-5])
 
         # Set up the Tasks - an altenative to the main loop.
         taskMgr.add(self.calculate_ground_height,
                     'Calculate the height of the ground')
         taskMgr.add(self.update_aircraft_by_physics,
                     'Update aircraft by physics')
-        taskMgr.add(self.update_aircraft_by_input, 'Update aircraft by input')
+        if devices:
+            taskMgr.add(self.update_aircraft_by_flight_stick_input, 'Update aircraft by input')
+        else:
+            taskMgr.add(self.update_aircraft_by_keyboard_input, 'Update aircraft by input')
         taskMgr.add(self.update_hud, 'Update HUD')
         taskMgr.add(self.update_aircraft_to_server,
                     'Update the server about our aircraft')
@@ -313,18 +325,18 @@ class FlightSimulator(ShowBase):
 
         # Calculate gravity
         gravity_direction = Vec3(0, 0, -1)
-        gravity = gravity_direction * self.mass * 9.81 * 5
+        gravity = gravity_direction * self.mass * 9.81 * 50
 
         # Calculate thrust
         thrust = self.get_forward() * self.max_thrust * self.throttle * 50000
 
         # Calculate drag
         drag_direction = -self.velocity.normalized()
-        drag = drag_direction * 0.5 * self.velocity.length_squared() * 100
+        drag = drag_direction * 0.5 * self.velocity.length_squared() * 90
 
         # Calculate lift
         lift_coefficient = np.interp(
-            angle_of_attack, self.AoA_x, self.AoA_y) * 30
+            angle_of_attack, self.AoA_x, self.AoA_y) * 60
         lift_direction = drag_direction.cross(self.get_right()).normalized()
         lift = lift_direction * 0.5 * self.velocity.length_squared() * lift_coefficient
 
@@ -338,7 +350,7 @@ class FlightSimulator(ShowBase):
 
         return task.cont
 
-    def update_aircraft_by_input(self, task):
+    def update_aircraft_by_keyboard_input(self, task):
         """
         Updates the aircraft's orientation based on user input.
 
@@ -362,6 +374,14 @@ class FlightSimulator(ShowBase):
         if self.key_map["sub-throttle"]:
             if self.throttle - 0.001 >= 0.01:
                 self.throttle -= 0.001
+        return task.cont
+    
+    def update_aircraft_by_flight_stick_input(self, task):
+        self.aircraft.setR(self.aircraft, self.device.axes[0].value * self.sensitivity)
+        self.aircraft.setP(self.aircraft, self.device.axes[1].value * self.sensitivity)
+        self.throttle = (self.device.axes[4].value + 1) / 2 # Range is from -1 to 1. set it to 0 to 1.
+        self.HUD.update_zoom(self.device.axes[2].value)
+
         return task.cont
 
     def update_hud(self, task):
@@ -572,6 +592,8 @@ class FlightSimulator(ShowBase):
         self.cleanup()
         sys.exit(1)
 
-
-game = FlightSimulator(1600, 900)
-game.run()
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        raise ValueError("No IP entered")
+    game = FlightSimulator(1600, 900, sys.argv[1])
+    game.run()
